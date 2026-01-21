@@ -7,6 +7,7 @@ import { MessageCircle, X, Send, Mic, Image as ImageIcon, Loader2, Volume2, Volu
 import { Streamdown } from "streamdown";
 
 interface Message {
+  id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
@@ -34,8 +35,8 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const autocompleteRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +90,9 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    if (lastMessageRef.current) {
+      lastMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, [messages]);
 
   const setupSpeechRecognition = () => {
@@ -120,27 +123,12 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
     }
   }, [selectedLanguage]);
 
-  const scrollToBottom = () => {
-    if (scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      const scrollHeight = container.scrollHeight;
-      const height = container.clientHeight;
-      const maxScrollTop = scrollHeight - height;
-      
-      // Instead of scrolling to the absolute bottom, scroll to show the last message
-      // but keep some context above it if possible.
-      container.scrollTo({
-        top: maxScrollTop,
-        behavior: "smooth"
-      });
-    }
-  };
-
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || inputValue.trim();
     if (!textToSend) return;
 
     const userMessage: Message = {
+      id: `user_${Date.now()}`,
       role: "user",
       content: textToSend,
       timestamp: new Date().toISOString(),
@@ -164,6 +152,7 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
       });
 
       const assistantMessage: Message = {
+        id: `assistant_${Date.now()}`,
         role: "assistant",
         content: response.response,
         resourceUrl: response.resourceUrl,
@@ -180,6 +169,7 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
       }
     } catch (error) {
       setMessages((prev) => [...prev, {
+        id: `error_${Date.now()}`,
         role: "assistant",
         content: "Sorry, I encountered an error. Please try again.",
         timestamp: new Date().toISOString(),
@@ -221,41 +211,41 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
 
   const chatContent = (
     <Card className={`${isEmbedded ? "w-full h-full border-none shadow-none rounded-none" : "fixed bottom-4 right-4 w-full max-w-[calc(100vw-2rem)] sm:w-96 h-[calc(100vh-2rem)] sm:h-[600px] sm:bottom-6 sm:right-6 shadow-2xl z-50 rounded-2xl"} flex flex-col overflow-hidden bg-white`}>
-      {!isEmbedded && (
-        <div className="p-4 text-white flex items-center justify-between" style={{ backgroundColor: "#E91E63" }}>
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="h-10 w-10 rounded-full bg-white/20 flex-shrink-0 flex items-center justify-center">
-              <GraduationCap className="h-6 w-6 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-bold text-sm leading-tight truncate">MySchool Assistant</h3>
-              <p className="text-[10px] opacity-80 truncate">Your intelligent guide for portal.myschoolct.com</p>
-            </div>
+      <div className="p-4 text-white flex items-center justify-between shrink-0" style={{ backgroundColor: "#E91E63" }}>
+        <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+          <div className="h-10 w-10 rounded-full bg-white/20 flex-shrink-0 flex items-center justify-center">
+            <GraduationCap className="h-6 w-6 text-white" />
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-            <a 
-              href="https://portal.myschoolct.com" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="hidden sm:block px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-medium transition-colors max-w-[120px] truncate"
-            >
-              portal.myschoolct.com
-            </a>
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <h3 className="font-bold text-sm leading-tight truncate">MySchool Assistant</h3>
+            <p className="text-[10px] opacity-80 truncate">Your intelligent guide for portal.myschoolct.com</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-2 overflow-hidden">
+          <a 
+            href="https://portal.myschoolct.com" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="hidden sm:block px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-medium transition-colors max-w-[100px] truncate"
+          >
+            portal.myschoolct.com
+          </a>
+          {!isEmbedded && (
             <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-pink-600 h-8 w-8">
               <X className="h-4 w-4" />
             </Button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {dailyTip && (
-        <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-100 text-[11px] flex items-center gap-2">
+        <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-100 text-[11px] flex items-center gap-2 shrink-0">
           <span className="font-bold text-yellow-800">💡 Tip:</span>
           <span className="text-yellow-700 truncate">{dailyTip}</span>
         </div>
       )}
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50 scroll-smooth">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center p-6 opacity-40">
             <MessageCircle className="h-12 w-12 mb-3" />
@@ -263,7 +253,11 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
           </div>
         )}
         {messages.map((msg, idx) => (
-          <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+          <div 
+            key={msg.id} 
+            ref={idx === messages.length - 1 ? lastMessageRef : null}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+          >
             <div className={`max-w-[90%] p-3 rounded-2xl shadow-sm ${msg.role === "user" ? "bg-[#E91E63] text-white rounded-tr-none" : "bg-white border border-gray-100 text-gray-800 rounded-tl-none"}`}>
               <div className="text-sm leading-relaxed">
                 {msg.role === "assistant" ? (
@@ -305,10 +299,9 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-gray-100 bg-white p-3 space-y-3 relative">
+      <div className="border-t border-gray-100 bg-white p-3 space-y-3 relative shrink-0">
         {showAutocomplete && inputValue.length >= 2 && (autocompleteQuery.data?.images?.length > 0 || autocompleteQuery.data?.resources?.length > 0) && (
           <div ref={autocompleteRef} className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-[60] animate-in slide-in-from-bottom-2 duration-200">
             {autocompleteQuery.data.images.length > 0 && (
