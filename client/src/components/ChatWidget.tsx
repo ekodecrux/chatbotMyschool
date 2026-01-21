@@ -208,32 +208,32 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
 
   const chatContent = (
     <Card className={`${isEmbedded ? "w-full h-full border-none shadow-none rounded-none" : "fixed bottom-4 right-4 w-full max-w-[calc(100vw-2rem)] sm:w-96 h-[calc(100vh-2rem)] sm:h-[600px] sm:bottom-6 sm:right-6 shadow-2xl z-50 rounded-2xl"} flex flex-col overflow-hidden bg-white`}>
-      <div className="p-4 text-white flex items-center justify-between" style={{ backgroundColor: "#E91E63" }}>
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
-            <GraduationCap className="h-6 w-6 text-white" />
+      {!isEmbedded && (
+        <div className="p-4 text-white flex items-center justify-between" style={{ backgroundColor: "#E91E63" }}>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
+              <GraduationCap className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm leading-tight">MySchool Assistant</h3>
+              <p className="text-[10px] opacity-80">Your intelligent guide for portal.myschoolct.com</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-sm leading-tight">MySchool Assistant</h3>
-            <p className="text-[10px] opacity-80">Your intelligent guide for portal.myschoolct.com</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <a 
-            href="https://portal.myschoolct.com" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="hidden sm:block px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-medium transition-colors"
-          >
-            portal.myschoolct.com
-          </a>
-          {!isEmbedded && (
+          <div className="flex items-center gap-2">
+            <a 
+              href="https://portal.myschoolct.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hidden sm:block px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-medium transition-colors"
+            >
+              portal.myschoolct.com
+            </a>
             <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-pink-600 h-8 w-8">
               <X className="h-4 w-4" />
             </Button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {dailyTip && (
         <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-100 text-[11px] flex items-center gap-2">
