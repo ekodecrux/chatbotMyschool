@@ -5,25 +5,52 @@ import { translateAndExtractKeyword } from "./translation_util";
 import { saveChatMessage } from "./chatbotDb";
 import { logSearchQuery } from "./analyticsDb";
 
-// Refined image thumbnail logic with strict relevance and Image Bank priority
-const getRelevantImageThumbnails = (query: string) => {
-  const q = query.toLowerCase().trim();
-  if (q.length < 2) return [];
+// Greetings and casual phrases
+const GREETINGS = ["hi", "hello", "hey", "hii", "hiii", "good morning", "good afternoon", "good evening", "namaste", "howdy", "sup", "yo"];
+const CASUAL_PHRASES = ["how are you", "what's up", "whatsup", "wassup", "thank you", "thanks", "bye", "goodbye", "ok", "okay", "hmm", "what", "who are you", "help"];
 
-  const allImages = [
-    { id: 'lion1', title: 'Lion', url: 'https://portal.myschoolct.com/assets/thumbnails/lion.jpg', keywords: ['lion', 'animal', 'cat'] },
-    { id: 'monkey1', title: 'Monkey', url: 'https://portal.myschoolct.com/assets/thumbnails/monkey.jpg', keywords: ['monkey', 'animal', 'primate'] },
-    { id: 'elephant1', title: 'Elephant', url: 'https://portal.myschoolct.com/assets/thumbnails/elephant.jpg', keywords: ['elephant', 'animal', 'mammal'] },
-    { id: 'tiger1', title: 'Tiger', url: 'https://portal.myschoolct.com/assets/thumbnails/tiger.jpg', keywords: ['tiger', 'animal', 'cat'] },
-    { id: 'maths1', title: 'Maths', url: 'https://portal.myschoolct.com/assets/thumbnails/maths.jpg', keywords: ['maths', 'mathematics', 'numbers'] },
-    { id: 'science1', title: 'Science', url: 'https://portal.myschoolct.com/assets/thumbnails/science.jpg', keywords: ['science', 'experiment', 'lab'] }
-  ];
+function isGreetingOrCasual(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  return GREETINGS.some(g => lower === g || lower.startsWith(g + " ")) || 
+         CASUAL_PHRASES.some(p => lower.includes(p));
+}
 
-  return allImages.filter(img => 
-    img.title.toLowerCase().includes(q) || 
-    img.keywords.some(k => k.includes(q))
-  ).slice(0, 4);
-};
+function getInteractiveResponse(text: string): { response: string; suggestions: string[] } {
+  const lower = text.toLowerCase().trim();
+  
+  if (GREETINGS.some(g => lower === g || lower.startsWith(g + " "))) {
+    return {
+      response: "Hello! 👋 I'm your MySchool Assistant. I can help you find educational resources. What are you looking for today?",
+      suggestions: ["Class 5 Maths", "Animals Images", "Telugu Poems", "Science Experiments"]
+    };
+  }
+  
+  if (lower.includes("thank")) {
+    return {
+      response: "You're welcome! 😊 Is there anything else I can help you find?",
+      suggestions: ["Image Bank", "Smart Wall", "MCQ Bank"]
+    };
+  }
+  
+  if (lower.includes("help") || lower.includes("what can you do")) {
+    return {
+      response: "I can help you find:\n• **Class Resources** - Try \"Class 5 Science\"\n• **Images** - Try \"Animals\" or \"Flowers\"\n• **Study Materials** - Try \"MCQ Bank\" or \"Exam Tips\"\n\nJust type what you're looking for!",
+      suggestions: ["Class 3 English", "Lion Images", "Telugu Stories"]
+    };
+  }
+  
+  if (lower.includes("who are you")) {
+    return {
+      response: "I'm MySchool Assistant - your intelligent guide to portal.myschoolct.com! I help students and teachers find educational resources quickly. Try searching for a topic!",
+      suggestions: ["Animals", "Class 4 Maths", "Smart Wall"]
+    };
+  }
+  
+  return {
+    response: "I'm not sure what you're looking for. Could you try searching for something specific like:\n• A class and subject (e.g., \"Class 5 Science\")\n• An image topic (e.g., \"Animals\", \"Flowers\")\n• A resource (e.g., \"MCQ Bank\", \"Smart Wall\")",
+    suggestions: ["Class 6 Maths", "Tiger Images", "Exam Tips"]
+  };
+}
 
 export const appRouter = router({
   chatbot: router({
@@ -43,31 +70,14 @@ export const appRouter = router({
         }
 
         const rawSuggestions = getSuggestions(processedQuery);
-        const images = getRelevantImageThumbnails(processedQuery);
-
-        let filteredResources = rawSuggestions.filter(s => {
-          const name = s.name.toLowerCase();
-          if (images.length > 0 && name.includes('mcq')) return false;
-          return true;
-        });
-
-        if (images.length > 0) {
-          const imageBank = {
-            name: "Image Bank - One Click Resource Centre",
-            url: "https://portal.myschoolct.com/views/sections/image-bank",
-            description: "Access 80,000+ educational images and visual resources."
-          };
-          filteredResources = filteredResources.filter(r => !r.name.toLowerCase().includes('image bank'));
-          filteredResources.unshift(imageBank);
-        }
-
+        
         return {
-          resources: filteredResources.map(s => ({
+          resources: rawSuggestions.map(s => ({
             name: s.name,
             url: s.url,
             description: s.description
-          })).slice(0, 3),
-          images: images
+          })).slice(0, 4),
+          images: []
         };
       }),
 
@@ -83,6 +93,22 @@ export const appRouter = router({
         const { message, sessionId, language } = input;
 
         try {
+          // Check for greetings/casual first
+          if (isGreetingOrCasual(message)) {
+            const interactive = getInteractiveResponse(message);
+            
+            saveChatMessage({ sessionId, role: "user", message, language: language || "en" });
+            saveChatMessage({ sessionId, role: "assistant", message: interactive.response, language: language || "en" });
+            
+            return {
+              response: interactive.response,
+              resourceUrl: "",
+              resourceName: "",
+              resourceDescription: "",
+              suggestions: interactive.suggestions
+            };
+          }
+
           let queryToSearch = message;
           let translatedQuery = null;
           
@@ -95,8 +121,8 @@ export const appRouter = router({
           const searchResults = performPrioritySearch(queryToSearch);
           const topResult = searchResults[0];
 
-          // Check if this is a low-confidence or no-match result
-          const isNoMatch = topResult.confidence < 0.3 || topResult.category === 'none' || topResult.category === 'search';
+          // Check if no good match
+          const isNoMatch = topResult.confidence < 0.3 || topResult.category === 'none';
           
           let responseText = "";
           let finalUrl = topResult.url;
@@ -104,39 +130,25 @@ export const appRouter = router({
           let finalDescription = topResult.description;
 
           if (isNoMatch) {
-            // Show fallback message with academic browse URL
             responseText = "Relevant results not found. Please find nearest matching results below.";
             finalUrl = "https://portal.myschoolct.com/views/academic";
             finalName = "Browse Academic Resources";
             finalDescription = "Explore all academic resources, classes, and subjects";
-          } else if (topResult.confidence === 0) {
-            responseText = topResult.description;
           } else {
             responseText = `**${topResult.name}**`;
           }
 
-          saveChatMessage({
-            sessionId,
-            role: "user",
-            message: message,
-            language: language || "en",
-          });
-
-          saveChatMessage({
-            sessionId,
-            role: "assistant",
-            message: responseText,
-            language: language || "en",
-          });
+          saveChatMessage({ sessionId, role: "user", message, language: language || "en" });
+          saveChatMessage({ sessionId, role: "assistant", message: responseText, language: language || "en" });
 
           logSearchQuery({
             query: message,
-            translatedQuery: translatedQuery,
+            translatedQuery,
             language: language || "en",
             resultsFound: !isNoMatch ? 1 : 0,
             topResultUrl: finalUrl,
             topResultName: finalName,
-            sessionId: sessionId,
+            sessionId,
           });
 
           return {

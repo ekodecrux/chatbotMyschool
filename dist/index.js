@@ -668,6 +668,103 @@ var myschool_knowledge_base_default = {
 };
 
 // server/enhancedSemanticSearch.ts
+var IMAGE_SEARCH_TERMS = [
+  "animals",
+  "animal",
+  "lion",
+  "tiger",
+  "elephant",
+  "monkey",
+  "cat",
+  "dog",
+  "bird",
+  "fish",
+  "flowers",
+  "flower",
+  "rose",
+  "lotus",
+  "sunflower",
+  "plants",
+  "trees",
+  "tree",
+  "fruits",
+  "fruit",
+  "apple",
+  "mango",
+  "banana",
+  "vegetables",
+  "vegetable",
+  "body parts",
+  "human body",
+  "organs",
+  "skeleton",
+  "shapes",
+  "circle",
+  "square",
+  "triangle",
+  "rectangle",
+  "colors",
+  "colour",
+  "red",
+  "blue",
+  "green",
+  "yellow",
+  "vehicles",
+  "car",
+  "bus",
+  "train",
+  "plane",
+  "airplane",
+  "ship",
+  "boat",
+  "buildings",
+  "house",
+  "school",
+  "hospital",
+  "temple",
+  "church",
+  "mosque",
+  "food",
+  "water",
+  "nature",
+  "sky",
+  "sun",
+  "moon",
+  "stars",
+  "earth",
+  "planet",
+  "insects",
+  "butterfly",
+  "ant",
+  "bee",
+  "spider",
+  "seasons",
+  "summer",
+  "winter",
+  "rain",
+  "monsoon",
+  "professions",
+  "doctor",
+  "teacher",
+  "farmer",
+  "police",
+  "soldier",
+  "sports",
+  "cricket",
+  "football",
+  "hockey",
+  "tennis",
+  "musical instruments",
+  "guitar",
+  "piano",
+  "drum",
+  "flute",
+  "festivals",
+  "diwali",
+  "holi",
+  "christmas",
+  "eid"
+];
 function soundex(str) {
   const s = str.toUpperCase().replace(/[^A-Z]/g, "");
   if (s.length === 0) return "0000";
@@ -708,7 +805,32 @@ function soundex(str) {
 function phoneticMatch(word1, word2) {
   return soundex(word1) === soundex(word2);
 }
+function fuzzyMatch(str1, str2) {
+  const s1 = str1.toLowerCase();
+  const s2 = str2.toLowerCase();
+  if (s1 === s2) return 1;
+  if (s1.includes(s2) || s2.includes(s1)) return 0.8;
+  const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
+  if (longer.length === 0) return 1;
+  let matches = 0;
+  for (let i = 0; i < shorter.length; i++) {
+    if (longer.includes(shorter[i])) matches++;
+  }
+  return matches / longer.length;
+}
 var BASE_URL = "https://portal.myschoolct.com";
+function isImageSearchTerm(query) {
+  const queryLower = query.toLowerCase().trim();
+  const queryWords = queryLower.split(/\s+/);
+  for (const term of IMAGE_SEARCH_TERMS) {
+    if (queryLower === term || queryLower.includes(term)) return true;
+    for (const word of queryWords) {
+      if (word === term || fuzzyMatch(word, term) > 0.7 || phoneticMatch(word, term)) return true;
+    }
+  }
+  return false;
+}
 function calculateSimilarity(query, keywords) {
   const queryLower = query.toLowerCase();
   const queryWords = queryLower.split(/\s+/).filter((w) => w.length > 1);
@@ -716,18 +838,13 @@ function calculateSimilarity(query, keywords) {
   let score = 0;
   for (const keyword of keywords) {
     const keywordLower = keyword.toLowerCase();
-    if (queryLower === keywordLower) {
-      score += 10;
-    } else if (queryLower.includes(keywordLower) || keywordLower.includes(queryLower)) {
-      score += 5;
-    }
+    if (queryLower === keywordLower) score += 10;
+    else if (queryLower.includes(keywordLower) || keywordLower.includes(queryLower)) score += 5;
     for (const word of queryWords) {
       if (word.length > 2) {
-        if (keywordLower.includes(word)) {
-          score += 2;
-        } else if (phoneticMatch(word, keywordLower)) {
-          score += 3;
-        }
+        if (keywordLower.includes(word)) score += 2;
+        else if (phoneticMatch(word, keywordLower)) score += 3;
+        else if (fuzzyMatch(word, keywordLower) > 0.6) score += 2;
       }
     }
   }
@@ -739,15 +856,12 @@ function extractClassAndSubject(query) {
   const ageMatch = queryLower.match(/age\s*(\d+)/i);
   if (ageMatch) {
     const age = parseInt(ageMatch[1]);
-    if (age >= 5 && age <= 15) {
-      return { classNum: age - 5, subject: null, lastWord: null };
-    }
+    if (age >= 5 && age <= 15) return { classNum: age - 5, subject: null, lastWord: null };
   }
   const classPatterns = [
     /(\d+)(?:st|nd|rd|th)?\s*(?:class|grade|std)/i,
     /(?:class|grade|std)\s*(\d+)/i,
-    /grade\s*-?\s*(\d+)/i,
-    /\b(\d+)\b/
+    /grade\s*-?\s*(\d+)/i
   ];
   let classNum = null;
   for (const pattern of classPatterns) {
@@ -776,11 +890,20 @@ function extractClassAndSubject(query) {
 function performPrioritySearch(query) {
   const results = [];
   const queryLower = query.toLowerCase().trim();
-  const isMeaningless = queryLower.length < 3 || !/^[a-zA-Z0-9\s]+$/.test(queryLower);
+  const isMeaningless = queryLower.length < 2 || !/^[a-zA-Z0-9\s]+$/.test(queryLower);
+  if (isImageSearchTerm(query)) {
+    return [{
+      name: `Image Bank: ${query}`,
+      description: `Search for "${query}" images in One Click Resource Centre - Image Bank (80,000+ educational images)`,
+      url: `${BASE_URL}/views/sections/image-bank?search=${encodeURIComponent(query)}`,
+      category: "image_bank",
+      confidence: 0.95
+    }];
+  }
   const oneClickResources = myschool_knowledge_base_default.sections.academic.subsections.one_click_resources.resources;
   for (const resource of oneClickResources) {
     const score = calculateSimilarity(queryLower, resource.keywords);
-    if (score > 5) {
+    if (score > 6) {
       results.push({
         name: resource.name,
         description: resource.keywords.join(", "),
@@ -818,7 +941,7 @@ function performPrioritySearch(query) {
     } else {
       results.push({
         name: `Class ${classNum} Resources`,
-        description: `Access Class ${classNum} resources`,
+        description: `Access all Class ${classNum} resources`,
         url: `${BASE_URL}/views/academic/class/class-${classNum}`,
         category: "class_subject",
         confidence: 0.85
@@ -840,19 +963,18 @@ function performPrioritySearch(query) {
     }
   }
   if (results.length > 0) return results.sort((a, b) => b.confidence - a.confidence).slice(0, 1);
-  if (!isMeaningless) {
-    results.push({
-      name: `Search Images: ${query}`,
-      description: `Searching for "${query}" in Academic Images`,
-      url: `${BASE_URL}/views/academic/result?text=${encodeURIComponent(query)}`,
+  if (!isMeaningless && queryLower.length >= 3) {
+    return [{
+      name: `Search: ${query}`,
+      description: `Searching for "${query}" in Academic Resources`,
+      url: `${BASE_URL}/views/sections/image-bank?search=${encodeURIComponent(query)}`,
       category: "search",
       confidence: 0.5
-    });
-    return results.slice(0, 1);
+    }];
   }
   return [{
-    name: "No exact search found",
-    description: "I couldn't find a match for your query. Please try searching for a class, subject, or resource.",
+    name: "Browse Academic Resources",
+    description: "Explore all academic resources, classes, and subjects",
     url: `${BASE_URL}/views/academic`,
     category: "none",
     confidence: 0
@@ -861,6 +983,15 @@ function performPrioritySearch(query) {
 function getSuggestions(query) {
   const results = [];
   const queryLower = query.toLowerCase().trim();
+  if (isImageSearchTerm(query)) {
+    results.push({
+      name: "Image Bank",
+      description: `Search for ${query} images`,
+      url: `${BASE_URL}/views/sections/image-bank?search=${encodeURIComponent(query)}`,
+      category: "image_bank",
+      confidence: 0.95
+    });
+  }
   const oneClickResources = myschool_knowledge_base_default.sections.academic.subsections.one_click_resources.resources;
   for (const resource of oneClickResources) {
     const score = calculateSimilarity(queryLower, resource.keywords);
@@ -937,21 +1068,51 @@ async function logSearchQuery(data) {
 }
 
 // server/routers.ts
-var getRelevantImageThumbnails = (query) => {
-  const q = query.toLowerCase().trim();
-  if (q.length < 2) return [];
-  const allImages = [
-    { id: "lion1", title: "Lion", url: "https://portal.myschoolct.com/assets/thumbnails/lion.jpg", keywords: ["lion", "animal", "cat"] },
-    { id: "monkey1", title: "Monkey", url: "https://portal.myschoolct.com/assets/thumbnails/monkey.jpg", keywords: ["monkey", "animal", "primate"] },
-    { id: "elephant1", title: "Elephant", url: "https://portal.myschoolct.com/assets/thumbnails/elephant.jpg", keywords: ["elephant", "animal", "mammal"] },
-    { id: "tiger1", title: "Tiger", url: "https://portal.myschoolct.com/assets/thumbnails/tiger.jpg", keywords: ["tiger", "animal", "cat"] },
-    { id: "maths1", title: "Maths", url: "https://portal.myschoolct.com/assets/thumbnails/maths.jpg", keywords: ["maths", "mathematics", "numbers"] },
-    { id: "science1", title: "Science", url: "https://portal.myschoolct.com/assets/thumbnails/science.jpg", keywords: ["science", "experiment", "lab"] }
-  ];
-  return allImages.filter(
-    (img) => img.title.toLowerCase().includes(q) || img.keywords.some((k) => k.includes(q))
-  ).slice(0, 4);
-};
+var GREETINGS = ["hi", "hello", "hey", "hii", "hiii", "good morning", "good afternoon", "good evening", "namaste", "howdy", "sup", "yo"];
+var CASUAL_PHRASES = ["how are you", "what's up", "whatsup", "wassup", "thank you", "thanks", "bye", "goodbye", "ok", "okay", "hmm", "what", "who are you", "help"];
+function isGreetingOrCasual(text2) {
+  const lower = text2.toLowerCase().trim();
+  return GREETINGS.some((g) => lower === g || lower.startsWith(g + " ")) || CASUAL_PHRASES.some((p) => lower.includes(p));
+}
+function getInteractiveResponse(text2) {
+  const lower = text2.toLowerCase().trim();
+  if (GREETINGS.some((g) => lower === g || lower.startsWith(g + " "))) {
+    return {
+      response: "Hello! \u{1F44B} I'm your MySchool Assistant. I can help you find educational resources. What are you looking for today?",
+      suggestions: ["Class 5 Maths", "Animals Images", "Telugu Poems", "Science Experiments"]
+    };
+  }
+  if (lower.includes("thank")) {
+    return {
+      response: "You're welcome! \u{1F60A} Is there anything else I can help you find?",
+      suggestions: ["Image Bank", "Smart Wall", "MCQ Bank"]
+    };
+  }
+  if (lower.includes("help") || lower.includes("what can you do")) {
+    return {
+      response: `I can help you find:
+\u2022 **Class Resources** - Try "Class 5 Science"
+\u2022 **Images** - Try "Animals" or "Flowers"
+\u2022 **Study Materials** - Try "MCQ Bank" or "Exam Tips"
+
+Just type what you're looking for!`,
+      suggestions: ["Class 3 English", "Lion Images", "Telugu Stories"]
+    };
+  }
+  if (lower.includes("who are you")) {
+    return {
+      response: "I'm MySchool Assistant - your intelligent guide to portal.myschoolct.com! I help students and teachers find educational resources quickly. Try searching for a topic!",
+      suggestions: ["Animals", "Class 4 Maths", "Smart Wall"]
+    };
+  }
+  return {
+    response: `I'm not sure what you're looking for. Could you try searching for something specific like:
+\u2022 A class and subject (e.g., "Class 5 Science")
+\u2022 An image topic (e.g., "Animals", "Flowers")
+\u2022 A resource (e.g., "MCQ Bank", "Smart Wall")`,
+    suggestions: ["Class 6 Maths", "Tiger Images", "Exam Tips"]
+  };
+}
 var appRouter = router({
   chatbot: router({
     autocomplete: publicProcedure.input(z.object({
@@ -966,28 +1127,13 @@ var appRouter = router({
         processedQuery = translation.keyword;
       }
       const rawSuggestions = getSuggestions(processedQuery);
-      const images = getRelevantImageThumbnails(processedQuery);
-      let filteredResources = rawSuggestions.filter((s) => {
-        const name = s.name.toLowerCase();
-        if (images.length > 0 && name.includes("mcq")) return false;
-        return true;
-      });
-      if (images.length > 0) {
-        const imageBank = {
-          name: "Image Bank - One Click Resource Centre",
-          url: "https://portal.myschoolct.com/views/sections/image-bank",
-          description: "Access 80,000+ educational images and visual resources."
-        };
-        filteredResources = filteredResources.filter((r) => !r.name.toLowerCase().includes("image bank"));
-        filteredResources.unshift(imageBank);
-      }
       return {
-        resources: filteredResources.map((s) => ({
+        resources: rawSuggestions.map((s) => ({
           name: s.name,
           url: s.url,
           description: s.description
-        })).slice(0, 3),
-        images
+        })).slice(0, 4),
+        images: []
       };
     }),
     chat: publicProcedure.input(
@@ -999,6 +1145,18 @@ var appRouter = router({
     ).mutation(async ({ input }) => {
       const { message, sessionId, language } = input;
       try {
+        if (isGreetingOrCasual(message)) {
+          const interactive = getInteractiveResponse(message);
+          saveChatMessage({ sessionId, role: "user", message, language: language || "en" });
+          saveChatMessage({ sessionId, role: "assistant", message: interactive.response, language: language || "en" });
+          return {
+            response: interactive.response,
+            resourceUrl: "",
+            resourceName: "",
+            resourceDescription: "",
+            suggestions: interactive.suggestions
+          };
+        }
         let queryToSearch = message;
         let translatedQuery = null;
         if (language && language !== "en") {
@@ -1008,7 +1166,7 @@ var appRouter = router({
         }
         const searchResults = performPrioritySearch(queryToSearch);
         const topResult = searchResults[0];
-        const isNoMatch = topResult.confidence < 0.3 || topResult.category === "none" || topResult.category === "search";
+        const isNoMatch = topResult.confidence < 0.3 || topResult.category === "none";
         let responseText = "";
         let finalUrl = topResult.url;
         let finalName = topResult.name;
@@ -1018,23 +1176,11 @@ var appRouter = router({
           finalUrl = "https://portal.myschoolct.com/views/academic";
           finalName = "Browse Academic Resources";
           finalDescription = "Explore all academic resources, classes, and subjects";
-        } else if (topResult.confidence === 0) {
-          responseText = topResult.description;
         } else {
           responseText = `**${topResult.name}**`;
         }
-        saveChatMessage({
-          sessionId,
-          role: "user",
-          message,
-          language: language || "en"
-        });
-        saveChatMessage({
-          sessionId,
-          role: "assistant",
-          message: responseText,
-          language: language || "en"
-        });
+        saveChatMessage({ sessionId, role: "user", message, language: language || "en" });
+        saveChatMessage({ sessionId, role: "assistant", message: responseText, language: language || "en" });
         logSearchQuery({
           query: message,
           translatedQuery,
