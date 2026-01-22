@@ -6,11 +6,11 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
 // shared/const.ts
-var COOKIE_NAME = "app_session_id";
-var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
+var UNAUTHED_ERR_MSG = "Unauthorized";
+var NOT_ADMIN_ERR_MSG = "Not an admin";
+var COOKIE_NAME = "auth_token";
+var ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1e3;
 var AXIOS_TIMEOUT_MS = 3e4;
-var UNAUTHED_ERR_MSG = "Please login (10001)";
-var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
 
 // server/db.ts
 import { eq } from "drizzle-orm";
@@ -1072,44 +1072,33 @@ import path2 from "path";
 import { createServer as createViteServer } from "vite";
 
 // vite.config.ts
-import { jsxLocPlugin } from "@builder.io/vite-plugin-jsx-loc";
-import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { defineConfig } from "vite";
-import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
-var plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime()];
+import { fileURLToPath } from "url";
+var __dirname = path.dirname(fileURLToPath(import.meta.url));
 var vite_config_default = defineConfig({
-  plugins,
+  plugins: [react()],
+  root: "./client",
   resolve: {
     alias: {
-      "@": path.resolve(import.meta.dirname, "client", "src"),
-      "@shared": path.resolve(import.meta.dirname, "shared"),
-      "@assets": path.resolve(import.meta.dirname, "attached_assets")
+      "@": path.resolve(__dirname, "./client/src"),
+      "@shared": path.resolve(__dirname, "./shared")
     }
   },
-  envDir: path.resolve(import.meta.dirname),
-  root: path.resolve(import.meta.dirname, "client"),
-  publicDir: path.resolve(import.meta.dirname, "client", "public"),
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
-    emptyOutDir: true
+    outDir: "../dist/public",
+    emptyOutDir: true,
+    minify: "terser",
+    sourcemap: false
   },
   server: {
-    host: true,
-    allowedHosts: [
-      ".manuspre.computer",
-      ".manus.computer",
-      ".manus-asia.computer",
-      ".manuscomputer.ai",
-      ".manusvm.computer",
-      "localhost",
-      "127.0.0.1"
-    ],
-    fs: {
-      strict: true,
-      deny: ["**/.*"]
-    }
+    port: 5173,
+    host: true
+  },
+  preview: {
+    port: 4173,
+    host: true
   }
 });
 
