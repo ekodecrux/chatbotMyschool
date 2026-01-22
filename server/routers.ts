@@ -95,12 +95,23 @@ export const appRouter = router({
           const searchResults = performPrioritySearch(queryToSearch);
           const topResult = searchResults[0];
 
-          // Humanized Response: Direct and crisp
+          // Check if this is a low-confidence or no-match result
+          const isNoMatch = topResult.confidence < 0.3 || topResult.category === 'none' || topResult.category === 'search';
+          
           let responseText = "";
-          if (topResult.confidence === 0) {
+          let finalUrl = topResult.url;
+          let finalName = topResult.name;
+          let finalDescription = topResult.description;
+
+          if (isNoMatch) {
+            // Show fallback message with academic browse URL
+            responseText = "Relevant results not found. Please find nearest matching results below.";
+            finalUrl = "https://portal.myschoolct.com/views/academic";
+            finalName = "Browse Academic Resources";
+            finalDescription = "Explore all academic resources, classes, and subjects";
+          } else if (topResult.confidence === 0) {
             responseText = topResult.description;
           } else {
-            // Straight pointed response without AI commentary
             responseText = `**${topResult.name}**`;
           }
 
@@ -122,17 +133,17 @@ export const appRouter = router({
             query: message,
             translatedQuery: translatedQuery,
             language: language || "en",
-            resultsFound: topResult.confidence > 0 ? 1 : 0,
-            topResultUrl: topResult.url,
-            topResultName: topResult.name,
+            resultsFound: !isNoMatch ? 1 : 0,
+            topResultUrl: finalUrl,
+            topResultName: finalName,
             sessionId: sessionId,
           });
 
           return {
             response: responseText,
-            resourceUrl: topResult.confidence > 0 ? topResult.url : null,
-            resourceName: topResult.confidence > 0 ? topResult.name : null,
-            resourceDescription: topResult.confidence > 0 ? topResult.description : null,
+            resourceUrl: finalUrl,
+            resourceName: finalName,
+            resourceDescription: finalDescription,
           };
 
         } catch (error) {
