@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { MessageCircle, X, Send, Mic, Image as ImageIcon, Loader2, Volume2, VolumeX, Languages, ExternalLink, Search, GraduationCap } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { SimpleText } from "./SimpleText";
 
 interface Message {
   id: string;
@@ -260,7 +260,7 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
                         {msg.resourceDescription && <p className="text-xs text-gray-500 mt-0.5">{msg.resourceDescription}</p>}
                       </div>
                     )}
-                    <Streamdown content={msg.content} />
+                    <SimpleText content={msg.content} />
                     {msg.resourceUrl && (
                       <div className="mt-2">
                         <a
