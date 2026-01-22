@@ -223,14 +223,6 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 ml-2 overflow-hidden">
-            <a 
-              href="https://portal.myschoolct.com" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="hidden sm:block px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-medium transition-colors max-w-[100px] truncate"
-            >
-              portal.myschoolct.com
-            </a>
             <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-pink-600 h-8 w-8">
               <X className="h-4 w-4" />
             </Button>
