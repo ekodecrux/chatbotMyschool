@@ -705,65 +705,20 @@ var IMAGE_SEARCH_TERMS = [
   "rectangle",
   "colors",
   "colour",
-  "red",
-  "blue",
-  "green",
-  "yellow",
   "vehicles",
   "car",
   "bus",
   "train",
   "plane",
-  "airplane",
-  "ship",
-  "boat",
-  "buildings",
-  "house",
-  "school",
-  "hospital",
-  "temple",
-  "church",
-  "mosque",
-  "food",
-  "water",
-  "nature",
-  "sky",
-  "sun",
-  "moon",
-  "stars",
-  "earth",
-  "planet",
   "insects",
   "butterfly",
   "ant",
   "bee",
   "spider",
-  "seasons",
-  "summer",
-  "winter",
-  "rain",
-  "monsoon",
-  "professions",
-  "doctor",
-  "teacher",
-  "farmer",
-  "police",
-  "soldier",
-  "sports",
-  "cricket",
-  "football",
-  "hockey",
-  "tennis",
-  "musical instruments",
-  "guitar",
-  "piano",
-  "drum",
-  "flute",
   "festivals",
   "diwali",
   "holi",
-  "christmas",
-  "eid"
+  "christmas"
 ];
 function soundex(str) {
   const s = str.toUpperCase().replace(/[^A-Z]/g, "");
@@ -793,12 +748,8 @@ function soundex(str) {
   let prevCode = codes[firstLetter] || "0";
   for (let i = 1; i < s.length && code.length < 4; i++) {
     const currentCode = codes[s[i]] || "0";
-    if (currentCode !== "0" && currentCode !== prevCode) {
-      code += currentCode;
-    }
-    if (currentCode !== "0") {
-      prevCode = currentCode;
-    }
+    if (currentCode !== "0" && currentCode !== prevCode) code += currentCode;
+    if (currentCode !== "0") prevCode = currentCode;
   }
   return (code + "0000").substring(0, 4);
 }
@@ -806,26 +757,22 @@ function phoneticMatch(word1, word2) {
   return soundex(word1) === soundex(word2);
 }
 function fuzzyMatch(str1, str2) {
-  const s1 = str1.toLowerCase();
-  const s2 = str2.toLowerCase();
+  const s1 = str1.toLowerCase(), s2 = str2.toLowerCase();
   if (s1 === s2) return 1;
   if (s1.includes(s2) || s2.includes(s1)) return 0.8;
   const longer = s1.length > s2.length ? s1 : s2;
   const shorter = s1.length > s2.length ? s2 : s1;
   if (longer.length === 0) return 1;
   let matches = 0;
-  for (let i = 0; i < shorter.length; i++) {
-    if (longer.includes(shorter[i])) matches++;
-  }
+  for (let i = 0; i < shorter.length; i++) if (longer.includes(shorter[i])) matches++;
   return matches / longer.length;
 }
 var BASE_URL = "https://portal.myschoolct.com";
 function isImageSearchTerm(query) {
   const queryLower = query.toLowerCase().trim();
-  const queryWords = queryLower.split(/\s+/);
   for (const term of IMAGE_SEARCH_TERMS) {
     if (queryLower === term || queryLower.includes(term)) return true;
-    for (const word of queryWords) {
+    for (const word of queryLower.split(/\s+/)) {
       if (word === term || fuzzyMatch(word, term) > 0.7 || phoneticMatch(word, term)) return true;
     }
   }
@@ -837,14 +784,14 @@ function calculateSimilarity(query, keywords) {
   if (queryWords.length === 0) return 0;
   let score = 0;
   for (const keyword of keywords) {
-    const keywordLower = keyword.toLowerCase();
-    if (queryLower === keywordLower) score += 10;
-    else if (queryLower.includes(keywordLower) || keywordLower.includes(queryLower)) score += 5;
+    const kw = keyword.toLowerCase();
+    if (queryLower === kw) score += 10;
+    else if (queryLower.includes(kw) || kw.includes(queryLower)) score += 5;
     for (const word of queryWords) {
       if (word.length > 2) {
-        if (keywordLower.includes(word)) score += 2;
-        else if (phoneticMatch(word, keywordLower)) score += 3;
-        else if (fuzzyMatch(word, keywordLower) > 0.6) score += 2;
+        if (kw.includes(word)) score += 2;
+        else if (phoneticMatch(word, kw)) score += 3;
+        else if (fuzzyMatch(word, kw) > 0.6) score += 2;
       }
     }
   }
@@ -852,17 +799,7 @@ function calculateSimilarity(query, keywords) {
 }
 function extractClassAndSubject(query) {
   const queryLower = query.toLowerCase().trim();
-  const words = queryLower.split(/\s+/);
-  const ageMatch = queryLower.match(/age\s*(\d+)/i);
-  if (ageMatch) {
-    const age = parseInt(ageMatch[1]);
-    if (age >= 5 && age <= 15) return { classNum: age - 5, subject: null, lastWord: null };
-  }
-  const classPatterns = [
-    /(\d+)(?:st|nd|rd|th)?\s*(?:class|grade|std)/i,
-    /(?:class|grade|std)\s*(\d+)/i,
-    /grade\s*-?\s*(\d+)/i
-  ];
+  const classPatterns = [/(\d+)(?:st|nd|rd|th)?\s*(?:class|grade|std)/i, /(?:class|grade|std)\s*(\d+)/i];
   let classNum = null;
   for (const pattern of classPatterns) {
     const match = queryLower.match(pattern);
@@ -875,8 +812,7 @@ function extractClassAndSubject(query) {
     }
   }
   const subjects = myschool_knowledge_base_default.sections.academic.subsections.grades.subjects;
-  let matchedSubject = null;
-  let maxScore = 0;
+  let matchedSubject = null, maxScore = 0;
   for (const [subjectName, subjectData] of Object.entries(subjects)) {
     const score = calculateSimilarity(queryLower, subjectData.keywords);
     if (score > maxScore) {
@@ -884,17 +820,15 @@ function extractClassAndSubject(query) {
       matchedSubject = subjectName;
     }
   }
-  const lastWord = words.length > 0 ? words[words.length - 1] : null;
-  return { classNum, subject: maxScore > 3 ? matchedSubject : null, lastWord };
+  return { classNum, subject: maxScore > 3 ? matchedSubject : null };
 }
 function performPrioritySearch(query) {
-  const results = [];
   const queryLower = query.toLowerCase().trim();
   const isMeaningless = queryLower.length < 2 || !/^[a-zA-Z0-9\s]+$/.test(queryLower);
   if (isImageSearchTerm(query)) {
     return [{
       name: `Image Bank: ${query}`,
-      description: `Search for "${query}" images in One Click Resource Centre - Image Bank (80,000+ educational images)`,
+      description: `Search for "${query}" in Image Bank (80,000+ images)`,
       url: `${BASE_URL}/views/sections/image-bank?search=${encodeURIComponent(query)}`,
       category: "image_bank",
       confidence: 0.95
@@ -902,79 +836,45 @@ function performPrioritySearch(query) {
   }
   const oneClickResources = myschool_knowledge_base_default.sections.academic.subsections.one_click_resources.resources;
   for (const resource of oneClickResources) {
-    const score = calculateSimilarity(queryLower, resource.keywords);
-    if (score > 6) {
-      results.push({
-        name: resource.name,
-        description: resource.keywords.join(", "),
-        url: BASE_URL + resource.url,
-        category: "one_click",
-        confidence: Math.min(score / 10, 1)
-      });
+    if (calculateSimilarity(queryLower, resource.keywords) > 8) {
+      return [{ name: resource.name, description: resource.keywords.join(", "), url: BASE_URL + resource.url, category: "one_click", confidence: 0.95 }];
     }
   }
-  if (results.length > 0) return results.sort((a, b) => b.confidence - a.confidence).slice(0, 1);
-  const { classNum, subject, lastWord } = extractClassAndSubject(query);
+  const { classNum, subject } = extractClassAndSubject(query);
   if (classNum) {
     if (subject) {
       const subjects = myschool_knowledge_base_default.sections.academic.subsections.grades.subjects;
       const subjectData = subjects[subject];
       if (subjectData && subjectData.code !== "unknown") {
-        const url = `${BASE_URL}/views/academic/class/class-${classNum}?main=1&mu=${subjectData.code}`;
-        results.push({
+        return [{
           name: `Class ${classNum} ${subject.charAt(0).toUpperCase() + subject.slice(1)}`,
           description: `Access Class ${classNum} ${subject} curriculum`,
-          url,
+          url: `${BASE_URL}/views/academic/class/class-${classNum}?main=1&mu=${subjectData.code}`,
           category: "class_subject",
           confidence: 0.95
-        });
+        }];
       }
-    } else if (lastWord && lastWord !== classNum.toString() && !["class", "grade", "std"].includes(lastWord)) {
-      const url = `${BASE_URL}/views/academic/class/class-${classNum}?search=${encodeURIComponent(lastWord)}`;
-      results.push({
-        name: `Class ${classNum} Search: ${lastWord}`,
-        description: `Searching for ${lastWord} in Class ${classNum}`,
-        url,
-        category: "class_subject",
-        confidence: 0.9
-      });
-    } else {
-      results.push({
-        name: `Class ${classNum} Resources`,
-        description: `Access all Class ${classNum} resources`,
-        url: `${BASE_URL}/views/academic/class/class-${classNum}`,
-        category: "class_subject",
-        confidence: 0.85
-      });
     }
+    return [{
+      name: `Class ${classNum} Resources`,
+      description: `All Class ${classNum} resources`,
+      url: `${BASE_URL}/views/academic/class/class-${classNum}`,
+      category: "class_subject",
+      confidence: 0.85
+    }];
   }
-  if (results.length > 0) return results.slice(0, 1);
-  for (const [sectionName, sectionData] of Object.entries(myschool_knowledge_base_default.sections)) {
-    if (sectionName === "academic") continue;
-    const score = calculateSimilarity(queryLower, sectionData.keywords);
-    if (score > 4) {
-      results.push({
-        name: sectionName.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
-        description: sectionData.description,
-        url: BASE_URL + sectionData.url,
-        category: "section",
-        confidence: Math.min(score / 10, 0.8)
-      });
-    }
-  }
-  if (results.length > 0) return results.sort((a, b) => b.confidence - a.confidence).slice(0, 1);
-  if (!isMeaningless && queryLower.length >= 3) {
+  if (!isMeaningless && queryLower.length >= 2) {
     return [{
       name: `Search: ${query}`,
-      description: `Searching for "${query}" in Academic Resources`,
-      url: `${BASE_URL}/views/sections/image-bank?search=${encodeURIComponent(query)}`,
+      description: `Searching for "${query}" across all resources`,
+      url: `${BASE_URL}/views/result?text=${encodeURIComponent(query)}`,
       category: "search",
       confidence: 0.5
     }];
   }
   return [{
     name: "Browse Academic Resources",
-    description: "Explore all academic resources, classes, and subjects",
+    description: "Explore all resources",
     url: `${BASE_URL}/views/academic`,
     category: "none",
     confidence: 0
@@ -986,7 +886,7 @@ function getSuggestions(query) {
   if (isImageSearchTerm(query)) {
     results.push({
       name: "Image Bank",
-      description: `Search for ${query} images`,
+      description: `Search ${query} images`,
       url: `${BASE_URL}/views/sections/image-bank?search=${encodeURIComponent(query)}`,
       category: "image_bank",
       confidence: 0.95
@@ -994,19 +894,17 @@ function getSuggestions(query) {
   }
   const oneClickResources = myschool_knowledge_base_default.sections.academic.subsections.one_click_resources.resources;
   for (const resource of oneClickResources) {
-    const score = calculateSimilarity(queryLower, resource.keywords);
-    if (score > 2) {
+    if (calculateSimilarity(queryLower, resource.keywords) > 2) {
       results.push({
         name: resource.name,
         description: resource.keywords.slice(0, 5).join(", "),
         url: BASE_URL + resource.url,
         category: "one_click",
-        confidence: Math.min(score / 10, 1)
+        confidence: 0.8
       });
     }
   }
-  results.sort((a, b) => b.confidence - a.confidence);
-  return results.slice(0, 4);
+  return results.sort((a, b) => b.confidence - a.confidence).slice(0, 4);
 }
 
 // server/translation_util.ts
