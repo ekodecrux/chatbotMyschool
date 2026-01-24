@@ -24,32 +24,22 @@ function fuzzyMatch(s1: string, s2: string): number {
   s1 = s1.toLowerCase(); s2 = s2.toLowerCase();
   if (s1 === s2) return 1;
   if (s1.includes(s2) || s2.includes(s1)) return 0.8;
-  const longer = s1.length > s2.length ? s1 : s2, shorter = s1.length > s2.length ? s2 : s1;
-  if (longer.length === 0) return 1;
-  let matches = 0;
-  for (let i = 0; i < shorter.length; i++) if (longer.includes(shorter[i])) matches++;
-  return matches / longer.length;
+  return 0;
 }
 
 export interface SearchResult { name: string; description: string; url: string; category: string; confidence: number; }
 
 const BASE_URL = 'https://portal.myschoolct.com';
 
-function calculateSimilarity(query: string, keywords: string[]): number {
-  const qLower = query.toLowerCase(), qWords = qLower.split(/\s+/).filter(w => w.length > 1);
-  if (qWords.length === 0) return 0;
-  let score = 0;
+// Strict exact match for One Click Resources
+function isExactOneClickMatch(query: string, keywords: string[]): boolean {
+  const qLower = query.toLowerCase().trim();
   for (const kw of keywords) {
     const kwLower = kw.toLowerCase();
-    if (qLower === kwLower) score += 10;
-    else if (qLower.includes(kwLower) || kwLower.includes(qLower)) score += 5;
-    for (const w of qWords) if (w.length > 2) {
-      if (kwLower.includes(w)) score += 2;
-      else if (phoneticMatch(w, kwLower)) score += 3;
-      else if (fuzzyMatch(w, kwLower) > 0.6) score += 2;
-    }
+    if (qLower === kwLower) return true;
+    if (qLower.split(' ').join('') === kwLower.split(' ').join('')) return true;
   }
-  return score;
+  return false;
 }
 
 function extractClassNumber(query: string): number | null {
@@ -60,23 +50,21 @@ function extractClassNumber(query: string): number | null {
 
 function extractSubject(query: string): string | null {
   const subjects: any = knowledgeBase.sections.academic.subsections.grades.subjects;
-  let matched: string | null = null, maxScore = 0;
+  const qLower = query.toLowerCase();
   for (const [name, data] of Object.entries(subjects)) {
-    const score = calculateSimilarity(query, (data as any).keywords);
-    if (score > maxScore && score > 3) { maxScore = score; matched = name; }
+    for (const kw of (data as any).keywords) {
+      if (qLower.includes(kw.toLowerCase())) return name;
+    }
   }
-  return matched;
+  return null;
 }
 
 function isMeaningless(q: string): boolean {
   q = q.trim().toLowerCase();
   if (q.length < 2) return true;
   if (!/[a-zA-Z]/.test(q)) return true;
-  // 4+ consonants in a row
   if (/[bcdfghjklmnpqrstvwxyz]{4,}/i.test(q)) return true;
-  // No vowels at all
   if (!/[aeiou]/i.test(q)) return true;
-  // Random keyboard patterns
   const gibberish = ['xyz', 'qwer', 'asdf', 'zxcv', 'hjkl', 'bnm'];
   for (const g of gibberish) if (q.includes(g)) return true;
   return false;
@@ -85,7 +73,15 @@ function isMeaningless(q: string): boolean {
 export function performPrioritySearch(query: string): SearchResult[] {
   const qLower = query.toLowerCase().trim();
 
-  // PRIORITY 1: Class queries (class 1 syllabus, class 5 maths)
+  // PRIORITY 1: Exact One Click Resource match (smart wall, mcq bank, etc.)
+  const oneClick = knowledgeBase.sections.academic.subsections.one_click_resources.resources;
+  for (const r of oneClick) {
+    if (isExactOneClickMatch(qLower, r.keywords)) {
+      return [{ name: r.name, description: r.keywords.join(', '), url: BASE_URL + r.url, category: 'one_click', confidence: 0.99 }];
+    }
+  }
+
+  // PRIORITY 2: Class queries (class 1 syllabus, class 5 maths)
   const classNum = extractClassNumber(query);
   if (classNum) {
     const subject = extractSubject(query);
@@ -103,23 +99,15 @@ export function performPrioritySearch(query: string): SearchResult[] {
       url: BASE_URL + '/views/academic/class/class-' + classNum, category: 'class_subject', confidence: 0.9 }];
   }
 
-  // PRIORITY 2: One Click exact matches
-  const oneClick = knowledgeBase.sections.academic.subsections.one_click_resources.resources;
-  for (const r of oneClick) {
-    if (calculateSimilarity(qLower, r.keywords) > 8) {
-      return [{ name: r.name, description: r.keywords.join(', '), url: BASE_URL + r.url, category: 'one_click', confidence: 0.95 }];
-    }
-  }
-
   // PRIORITY 3: Meaningless/gibberish -> academic page
   if (isMeaningless(query)) {
     return [{ name: 'Browse Academic Resources', description: 'Explore all resources',
       url: BASE_URL + '/views/academic', category: 'none', confidence: 0 }];
   }
 
-  // PRIORITY 4: General search with /views/result?text=
-  return [{ name: 'Search: ' + query, description: 'Searching for  + query + ',
-    url: BASE_URL + '/views/result?text=' + encodeURIComponent(query.toLowerCase()),
+  // PRIORITY 4: Text search using /views/sections/result?text=
+  return [{ name: 'Search: ' + query, description: 'Searching for  + query +  across all resources',
+    url: BASE_URL + '/views/sections/result?text=' + encodeURIComponent(qLower),
     category: 'search', confidence: 0.5 }];
 }
 
@@ -128,9 +116,9 @@ export function getSuggestions(query: string): SearchResult[] {
   const qLower = query.toLowerCase().trim();
   const oneClick = knowledgeBase.sections.academic.subsections.one_click_resources.resources;
   for (const r of oneClick) {
-    if (calculateSimilarity(qLower, r.keywords) > 2) {
-      results.push({ name: r.name, description: r.keywords.slice(0,5).join(', '), url: BASE_URL + r.url, category: 'one_click', confidence: 0.8 });
+    if (isExactOneClickMatch(qLower, r.keywords)) {
+      results.push({ name: r.name, description: r.keywords.slice(0,5).join(', '), url: BASE_URL + r.url, category: 'one_click', confidence: 0.95 });
     }
   }
-  return results.sort((a,b) => b.confidence - a.confidence).slice(0,4);
+  return results.slice(0, 4);
 }

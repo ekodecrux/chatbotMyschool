@@ -63,7 +63,7 @@
             {
               "name": "Smart Wall",
               "url": "/views/academic/smart-wall?ocrc",
-              "keywords": ["smart wall", "smartwall", "wall", "classroom decoration", "display", "visual", "posters", "charts", "classroom decor", "decoration"]
+              "keywords": ["smart wall", "smartwall", "class decoration", "classroom decoration", "decoration", "decor"]
             },
             {
               "name": "Image Bank",
@@ -83,7 +83,7 @@
             {
               "name": "Visual Worksheets",
               "url": "/views/academic/result?text=visual worksheets",
-              "keywords": ["visual worksheets", "worksheets", "activities", "practice"]
+              "keywords": ["visual worksheets", "visual worksheet"]
             },
             {
               "name": "Pictorial Stories",

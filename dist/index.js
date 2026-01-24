@@ -536,7 +536,7 @@ var myschool_knowledge_base_default = {
             {
               name: "Smart Wall",
               url: "/views/academic/smart-wall?ocrc",
-              keywords: ["smart wall", "smartwall", "wall", "classroom decoration", "display", "visual", "posters", "charts", "classroom decor", "decoration"]
+              keywords: ["smart wall", "smartwall", "class decoration", "classroom decoration", "decoration", "decor"]
             },
             {
               name: "Image Bank",
@@ -556,7 +556,7 @@ var myschool_knowledge_base_default = {
             {
               name: "Visual Worksheets",
               url: "/views/academic/result?text=visual worksheets",
-              keywords: ["visual worksheets", "worksheets", "activities", "practice"]
+              keywords: ["visual worksheets", "visual worksheet"]
             },
             {
               name: "Pictorial Stories",
@@ -668,68 +668,15 @@ var myschool_knowledge_base_default = {
 };
 
 // server/enhancedSemanticSearch.ts
-function soundex(str) {
-  const s = str.toUpperCase().replace(/[^A-Z]/g, "");
-  if (s.length === 0) return "0000";
-  const firstLetter = s[0];
-  const codes = {
-    "B": "1",
-    "F": "1",
-    "P": "1",
-    "V": "1",
-    "C": "2",
-    "G": "2",
-    "J": "2",
-    "K": "2",
-    "Q": "2",
-    "S": "2",
-    "X": "2",
-    "Z": "2",
-    "D": "3",
-    "T": "3",
-    "L": "4",
-    "M": "5",
-    "N": "5",
-    "R": "6"
-  };
-  let code = firstLetter, prevCode = codes[firstLetter] || "0";
-  for (let i = 1; i < s.length && code.length < 4; i++) {
-    const currentCode = codes[s[i]] || "0";
-    if (currentCode !== "0" && currentCode !== prevCode) code += currentCode;
-    if (currentCode !== "0") prevCode = currentCode;
-  }
-  return (code + "0000").substring(0, 4);
-}
-function phoneticMatch(w1, w2) {
-  return soundex(w1) === soundex(w2);
-}
-function fuzzyMatch(s1, s2) {
-  s1 = s1.toLowerCase();
-  s2 = s2.toLowerCase();
-  if (s1 === s2) return 1;
-  if (s1.includes(s2) || s2.includes(s1)) return 0.8;
-  const longer = s1.length > s2.length ? s1 : s2, shorter = s1.length > s2.length ? s2 : s1;
-  if (longer.length === 0) return 1;
-  let matches = 0;
-  for (let i = 0; i < shorter.length; i++) if (longer.includes(shorter[i])) matches++;
-  return matches / longer.length;
-}
 var BASE_URL = "https://portal.myschoolct.com";
-function calculateSimilarity(query, keywords) {
-  const qLower = query.toLowerCase(), qWords = qLower.split(/\s+/).filter((w) => w.length > 1);
-  if (qWords.length === 0) return 0;
-  let score = 0;
+function isExactOneClickMatch(query, keywords) {
+  const qLower = query.toLowerCase().trim();
   for (const kw of keywords) {
     const kwLower = kw.toLowerCase();
-    if (qLower === kwLower) score += 10;
-    else if (qLower.includes(kwLower) || kwLower.includes(qLower)) score += 5;
-    for (const w of qWords) if (w.length > 2) {
-      if (kwLower.includes(w)) score += 2;
-      else if (phoneticMatch(w, kwLower)) score += 3;
-      else if (fuzzyMatch(w, kwLower) > 0.6) score += 2;
-    }
+    if (qLower === kwLower) return true;
+    if (qLower.split(" ").join("") === kwLower.split(" ").join("")) return true;
   }
-  return score;
+  return false;
 }
 function extractClassNumber(query) {
   const patterns = [/(\d+)(?:st|nd|rd|th)?\s*(?:class|grade|std)/i, /(?:class|grade|std)\s*(\d+)/i];
@@ -744,15 +691,13 @@ function extractClassNumber(query) {
 }
 function extractSubject(query) {
   const subjects = myschool_knowledge_base_default.sections.academic.subsections.grades.subjects;
-  let matched = null, maxScore = 0;
+  const qLower = query.toLowerCase();
   for (const [name, data] of Object.entries(subjects)) {
-    const score = calculateSimilarity(query, data.keywords);
-    if (score > maxScore && score > 3) {
-      maxScore = score;
-      matched = name;
+    for (const kw of data.keywords) {
+      if (qLower.includes(kw.toLowerCase())) return name;
     }
   }
-  return matched;
+  return null;
 }
 function isMeaningless(q) {
   q = q.trim().toLowerCase();
@@ -766,6 +711,12 @@ function isMeaningless(q) {
 }
 function performPrioritySearch(query) {
   const qLower = query.toLowerCase().trim();
+  const oneClick = myschool_knowledge_base_default.sections.academic.subsections.one_click_resources.resources;
+  for (const r of oneClick) {
+    if (isExactOneClickMatch(qLower, r.keywords)) {
+      return [{ name: r.name, description: r.keywords.join(", "), url: BASE_URL + r.url, category: "one_click", confidence: 0.99 }];
+    }
+  }
   const classNum = extractClassNumber(query);
   if (classNum) {
     const subject = extractSubject(query);
@@ -790,12 +741,6 @@ function performPrioritySearch(query) {
       confidence: 0.9
     }];
   }
-  const oneClick = myschool_knowledge_base_default.sections.academic.subsections.one_click_resources.resources;
-  for (const r of oneClick) {
-    if (calculateSimilarity(qLower, r.keywords) > 8) {
-      return [{ name: r.name, description: r.keywords.join(", "), url: BASE_URL + r.url, category: "one_click", confidence: 0.95 }];
-    }
-  }
   if (isMeaningless(query)) {
     return [{
       name: "Browse Academic Resources",
@@ -807,8 +752,8 @@ function performPrioritySearch(query) {
   }
   return [{
     name: "Search: " + query,
-    description: "Searching for  + query + ",
-    url: BASE_URL + "/views/result?text=" + encodeURIComponent(query.toLowerCase()),
+    description: "Searching for  + query +  across all resources",
+    url: BASE_URL + "/views/sections/result?text=" + encodeURIComponent(qLower),
     category: "search",
     confidence: 0.5
   }];
@@ -818,11 +763,11 @@ function getSuggestions(query) {
   const qLower = query.toLowerCase().trim();
   const oneClick = myschool_knowledge_base_default.sections.academic.subsections.one_click_resources.resources;
   for (const r of oneClick) {
-    if (calculateSimilarity(qLower, r.keywords) > 2) {
-      results.push({ name: r.name, description: r.keywords.slice(0, 5).join(", "), url: BASE_URL + r.url, category: "one_click", confidence: 0.8 });
+    if (isExactOneClickMatch(qLower, r.keywords)) {
+      results.push({ name: r.name, description: r.keywords.slice(0, 5).join(", "), url: BASE_URL + r.url, category: "one_click", confidence: 0.95 });
     }
   }
-  return results.sort((a, b) => b.confidence - a.confidence).slice(0, 4);
+  return results.slice(0, 4);
 }
 
 // server/translation_util.ts
