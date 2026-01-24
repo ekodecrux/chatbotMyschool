@@ -472,86 +472,49 @@ var adminProcedure = t.procedure.use(
 
 // server/myschool_knowledge_base.json
 var myschool_knowledge_base_default = {
-  base_url: "https://demo.myschool.in",
+  base_url: "https://portal.myschoolct.com",
   sections: {
     academic: {
+      name: "Academic",
       url: "/views/academic",
-      description: "Academic resources organized by grade and subject",
-      keywords: ["academic", "study", "learn", "education", "school", "class", "grade", "subject"],
+      description: "Access academic resources by class and subject",
+      keywords: ["academic"],
       subsections: {
         grades: {
-          url_pattern: "/views/academic/grade/grade-{N}?main=1&mu={subject_code}",
-          grades: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          description: "Classes 1-10 curriculum",
           subjects: {
-            computer: {
-              code: "unknown",
-              keywords: ["computer", "computers", "computing", "it", "technology", "coding"]
-            },
-            english: {
-              code: "1",
-              keywords: ["english", "language", "grammar", "reading", "writing"]
-            },
-            evs: {
-              code: "unknown",
-              keywords: ["evs", "environment", "environmental studies", "nature", "science"]
-            },
-            hindi: {
-              code: "2",
-              keywords: ["hindi", "\u0939\u093F\u0902\u0926\u0940", "language"]
-            },
-            maths: {
-              code: "3",
-              keywords: ["maths", "mathematics", "math", "numbers", "calculation", "arithmetic", "algebra", "geometry"]
-            },
-            science: {
-              code: "4",
-              keywords: ["science", "physics", "chemistry", "biology", "experiment"]
-            },
-            social: {
-              code: "unknown",
-              keywords: ["social", "social studies", "history", "geography", "civics"]
-            },
-            telugu: {
-              code: "unknown",
-              keywords: ["telugu", "\u0C24\u0C46\u0C32\u0C41\u0C17\u0C41", "language"]
-            }
-          },
-          examples: [
-            {
-              query: "5th class science",
-              url: "/views/academic/grade/grade-5?main=1&mu=4",
-              description: "Grade 5 Science with all units"
-            },
-            {
-              query: "grade 3 maths",
-              url: "/views/academic/grade/grade-3?main=1&mu=3",
-              description: "Grade 3 Mathematics"
-            }
-          ]
+            computer: { code: "com", keywords: ["computer", "computers", "computing", "coding", "programming"] },
+            english: { code: "eng", keywords: ["english", "grammar"] },
+            evs: { code: "evs", keywords: ["evs", "environmental studies", "environment"] },
+            hindi: { code: "hin", keywords: ["hindi"] },
+            maths: { code: "mat", keywords: ["maths", "mathematics", "math"] },
+            science: { code: "sci", keywords: ["science", "physics", "chemistry", "biology"] },
+            social: { code: "soc", keywords: ["social", "social studies", "history", "geography", "civics"] },
+            telugu: { code: "tel", keywords: ["telugu"] }
+          }
         },
         one_click_resources: {
-          description: "Quick access resources from One Click Resource Centre",
-          url_suffix: "?ocrc",
+          description: "One Click Resource Centre",
           resources: [
             {
               name: "Smart Wall",
               url: "/views/academic/smart-wall?ocrc",
-              keywords: ["smart wall", "smartwall", "class decoration", "classroom decoration", "decoration", "decor"]
+              keywords: ["smart wall", "smartwall", "class decoration", "classroom decoration"]
             },
             {
               name: "Image Bank",
-              url: "/views/academic/image-bank?ocrc",
-              keywords: ["image bank", "imagebank", "images", "pictures", "photos", "visuals", "graphics"]
+              url: "/views/sections/image-bank",
+              keywords: ["image bank", "imagebank"]
             },
             {
               name: "Exam Tips",
               url: "/views/academic/result?text=exam tips",
-              keywords: ["exam tips", "exam", "test", "preparation", "tips"]
+              keywords: ["exam tips", "examtips"]
             },
             {
               name: "MCQ Bank",
               url: "/views/academic/result?text=mcq",
-              keywords: ["mcq", "multiple choice", "questions", "quiz", "test"]
+              keywords: ["mcq bank", "mcqbank", "mcq"]
             },
             {
               name: "Visual Worksheets",
@@ -561,109 +524,12 @@ var myschool_knowledge_base_default = {
             {
               name: "Pictorial Stories",
               url: "/views/academic/result?text=pictorial stories",
-              keywords: ["pictorial stories", "stories", "picture stories", "reading"]
+              keywords: ["pictorial stories", "pictorial story"]
             }
           ]
         }
       }
-    },
-    early_career: {
-      url: "/views/early-career",
-      description: "4200+ read aloud stories for teaching & learning to impart value education",
-      keywords: ["early career", "career", "stories", "read aloud", "value education", "moral stories"],
-      subsections: {
-        budding_career: {
-          name: "Budding Career"
-        },
-        makers: {
-          name: "Makers"
-        }
-      }
-    },
-    edutainment: {
-      url: "/views/edutainment",
-      description: "Educational entertainment resources",
-      keywords: ["edutainment", "entertainment", "fun", "games", "activities", "learning games"],
-      subsections: {
-        fun_station: {
-          name: "Fun Station"
-        },
-        makers: {
-          name: "Makers"
-        }
-      }
-    },
-    print_rich: {
-      url: "/views/print-rich",
-      description: "Print-rich environment resources",
-      keywords: ["print rich", "printing", "publishing", "materials", "resources"],
-      subsections: {
-        publishing: {
-          name: "Publishing"
-        },
-        makers: {
-          name: "Makers"
-        }
-      }
-    },
-    maker: {
-      url: "/views/maker",
-      description: "Maker education resources",
-      keywords: ["maker", "diy", "create", "build", "hands-on", "projects"]
-    },
-    info_hub: {
-      url: "/views/info-hub",
-      description: "Information hub with various resources",
-      keywords: ["info hub", "information", "resources", "help"]
     }
-  },
-  search: {
-    academic_search: {
-      url_pattern: "/views/academic/result?text={keyword}",
-      description: "Search within academic section"
-    },
-    sections_search: {
-      url_pattern: "/views/sections/result?text={keyword}",
-      description: "Search across all sections"
-    }
-  },
-  navigation_rules: {
-    priority_order: [
-      "one_click_resources",
-      "grades_and_subjects",
-      "main_sections",
-      "search_fallback"
-    ],
-    translation_required: ["hindi", "telugu", "gujarati"],
-    keyword_extraction: "Extract main topic keywords from user query, not full sentences",
-    examples: [
-      {
-        user_query: "\u092E\u0941\u091D\u0947 \u0915\u0941\u0924\u094D\u0924\u093E \u0915\u093E \u0907\u092E\u0947\u091C \u091A\u093E\u0939\u093F\u090F",
-        translation: "I need dog image",
-        extracted_keyword: "dog",
-        recommended_url: "/views/sections/result?text=dog",
-        reasoning: "Image request \u2192 Image Bank or search"
-      },
-      {
-        user_query: "\u0C28\u0C3E\u0C15\u0C41 \u0C2A\u0C41\u0C32\u0C3F \u0C2C\u0C4A\u0C2E\u0C4D\u0C2E \u0C15\u0C3E\u0C35\u0C3E\u0C32\u0C3F",
-        translation: "I need tiger image",
-        extracted_keyword: "tiger",
-        recommended_url: "/views/sections/result?text=tiger",
-        reasoning: "Image request \u2192 Image Bank or search"
-      },
-      {
-        user_query: "5th class science",
-        extracted_keyword: "grade 5 science",
-        recommended_url: "/views/academic/grade/grade-5?main=1&mu=4",
-        reasoning: "Direct grade-subject match"
-      },
-      {
-        user_query: "classroom decoration",
-        extracted_keyword: "decoration",
-        recommended_url: "/views/academic/smart-wall?ocrc",
-        reasoning: "Decoration \u2192 Smart Wall (One Click Resource)"
-      }
-    ]
   }
 };
 
