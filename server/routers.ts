@@ -40,18 +40,11 @@ async function fetchPortalResults(query: string, size: number = 6): Promise<Port
 }
 
 function buildSearchUrl(aiResponse: any): string {
+  // For class-based queries, use simple class URL without parameters
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
-    if (aiResponse.subject) {
-      const subjectCodes: any = { 
-        maths: "mat", science: "sci", english: "eng", 
-        hindi: "hin", telugu: "tel", social: "soc", 
-        evs: "evs", computer: "com" 
-      };
-      const code = subjectCodes[aiResponse.subject.toLowerCase()] || "";
-      if (code) return `${BASE_URL}/views/academic/class/class-${aiResponse.classNum}?main=1&mu=${code}`;
-    }
     return `${BASE_URL}/views/academic/class/class-${aiResponse.classNum}`;
   }
+  // For all other queries, use search results
   if (aiResponse.searchQuery) {
     return `${BASE_URL}/views/sections/result?text=${encodeURIComponent(aiResponse.searchQuery)}`;
   }

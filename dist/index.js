@@ -976,20 +976,6 @@ async function fetchPortalResults(query, size = 6) {
 }
 function buildSearchUrl(aiResponse) {
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
-    if (aiResponse.subject) {
-      const subjectCodes = {
-        maths: "mat",
-        science: "sci",
-        english: "eng",
-        hindi: "hin",
-        telugu: "tel",
-        social: "soc",
-        evs: "evs",
-        computer: "com"
-      };
-      const code = subjectCodes[aiResponse.subject.toLowerCase()] || "";
-      if (code) return `${BASE_URL2}/views/academic/class/class-${aiResponse.classNum}?main=1&mu=${code}`;
-    }
     return `${BASE_URL2}/views/academic/class/class-${aiResponse.classNum}`;
   }
   if (aiResponse.searchQuery) {
