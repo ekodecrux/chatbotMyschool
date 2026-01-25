@@ -832,14 +832,18 @@ RESPOND IN JSON ONLY:
 Rules:
 1. For animals, objects, topics \u2192 direct_search with searchQuery
 2. For greetings (hi, hello) \u2192 greeting type, no search
-3. For "class X subject" \u2192 class_subject with classNum and subject
-4. Default: direct_search
+3. For "class X subject" WITH CLASS NUMBER \u2192 class_subject with classNum and subject
+4. For subject name WITHOUT class number (e.g., "maths", "science", "english") \u2192 direct_search, NOT class_subject
+5. Default: direct_search
+
+IMPORTANT: Only use class_subject if you can extract a CLASS NUMBER (1-10)
 
 Examples:
 "monkey" \u2192 {"message": "Here are monkey resources!", "searchQuery": "monkey", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
-"fruit" \u2192 {"message": "Here are fruit resources!", "searchQuery": "fruit", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
-"animals" \u2192 {"message": "Showing animal resources!", "searchQuery": "animals", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
+"maths" \u2192 {"message": "Here are maths resources!", "searchQuery": "maths", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
+"science" \u2192 {"message": "Here are science resources!", "searchQuery": "science", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
 "class 5 maths" \u2192 {"message": "Opening Class 5 Maths!", "searchQuery": "class 5 maths", "searchType": "class_subject", "classNum": 5, "subject": "maths", "suggestions": []}
+"class 8 science" \u2192 {"message": "Opening Class 8 Science!", "searchQuery": "class 8 science", "searchType": "class_subject", "classNum": 8, "subject": "science", "suggestions": []}
 "hi" \u2192 {"message": "Hello! What would you like to explore?", "searchQuery": null, "searchType": "greeting", "classNum": null, "subject": null, "suggestions": ["Animals", "Class 5 Maths", "Exam Tips"]}`;
 async function getAIResponse(userMessage, history = []) {
   try {

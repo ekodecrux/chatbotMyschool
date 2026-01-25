@@ -14,14 +14,18 @@ RESPOND IN JSON ONLY:
 Rules:
 1. For animals, objects, topics → direct_search with searchQuery
 2. For greetings (hi, hello) → greeting type, no search
-3. For "class X subject" → class_subject with classNum and subject
-4. Default: direct_search
+3. For "class X subject" WITH CLASS NUMBER → class_subject with classNum and subject
+4. For subject name WITHOUT class number (e.g., "maths", "science", "english") → direct_search, NOT class_subject
+5. Default: direct_search
+
+IMPORTANT: Only use class_subject if you can extract a CLASS NUMBER (1-10)
 
 Examples:
 "monkey" → {"message": "Here are monkey resources!", "searchQuery": "monkey", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
-"fruit" → {"message": "Here are fruit resources!", "searchQuery": "fruit", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
-"animals" → {"message": "Showing animal resources!", "searchQuery": "animals", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
+"maths" → {"message": "Here are maths resources!", "searchQuery": "maths", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
+"science" → {"message": "Here are science resources!", "searchQuery": "science", "searchType": "direct_search", "classNum": null, "subject": null, "suggestions": []}
 "class 5 maths" → {"message": "Opening Class 5 Maths!", "searchQuery": "class 5 maths", "searchType": "class_subject", "classNum": 5, "subject": "maths", "suggestions": []}
+"class 8 science" → {"message": "Opening Class 8 Science!", "searchQuery": "class 8 science", "searchType": "class_subject", "classNum": 8, "subject": "science", "suggestions": []}
 "hi" → {"message": "Hello! What would you like to explore?", "searchQuery": null, "searchType": "greeting", "classNum": null, "subject": null, "suggestions": ["Animals", "Class 5 Maths", "Exam Tips"]}`;
 
 export interface AIResponse {
