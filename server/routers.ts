@@ -4,6 +4,7 @@ import { performPrioritySearch, correctSpelling } from "./enhancedSemanticSearch
 import { getAIResponse } from "./groqAI";
 import { saveChatMessage } from "./chatbotDb";
 import { logSearchQuery } from "./analyticsDb";
+import { translateAndExtractKeyword } from "./translation_util";
 
 const BASE_URL = "https://portal.myschoolct.com";
 
@@ -42,8 +43,12 @@ export const appRouter = router({
         const { message, sessionId, language, history } = input;
 
         try {
-          // Apply spell correction to the user's message
-          const correctedMessage = correctSpelling(message);
+          // Step 1: Detect and translate non-English queries (Telugu, Hindi, Gujarati, etc.)
+          const translationResult = await translateAndExtractKeyword(message);
+          const translatedMessage = translationResult.translatedText;
+          
+          // Step 2: Apply spell correction to the translated/original message
+          const correctedMessage = correctSpelling(translatedMessage);
           
           // Get AI response with conversation context
           const aiResponse = await getAIResponse(correctedMessage, history || []);
@@ -70,7 +75,7 @@ export const appRouter = router({
           if (aiResponse.searchQuery) {
             logSearchQuery({
               query: message,
-              translatedQuery: correctedMessage !== message ? correctedMessage : null,
+              translatedQuery: translatedMessage !== message ? translatedMessage : null,
               language: language || "en",
               resultsFound: resourceUrl ? 1 : 0,
               topResultUrl: resourceUrl,

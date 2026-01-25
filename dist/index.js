@@ -880,6 +880,60 @@ async function logSearchQuery(data) {
   }
 }
 
+// server/translation_util.ts
+import OpenAI from "openai";
+import dotenv from "dotenv";
+dotenv.config();
+var groq2 = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1"
+});
+async function translateAndExtractKeyword(text2) {
+  if (/^[a-zA-Z0-9\s.,!?-]+$/.test(text2)) {
+    return { translatedText: text2, keyword: text2 };
+  }
+  try {
+    const response = await groq2.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content: `You are a translation assistant for MySchool educational portal. 
+Your task:
+1. Detect the language (Telugu, Hindi, Gujarati, Tamil, or other Indian languages)
+2. Translate the input to English accurately
+3. Extract the most important keyword for educational resource search
+
+Return JSON format: {"translatedText": "...", "keyword": "..."}
+
+Examples:
+Telugu "\u0C1C\u0C02\u0C24\u0C41\u0C35\u0C41\u0C32 \u0C1A\u0C3F\u0C24\u0C4D\u0C30\u0C3E\u0C32\u0C41" \u2192 {"translatedText": "animal images", "keyword": "animals"}
+Hindi "\u0915\u0915\u094D\u0937\u093E 5 \u0917\u0923\u093F\u0924" \u2192 {"translatedText": "class 5 maths", "keyword": "maths"}
+Gujarati "\u0AB5\u0ABF\u0A9C\u0ACD\u0A9E\u0ABE\u0AA8 \u0AAA\u0AB0\u0AC0\u0A95\u0ACD\u0AB7\u0ABE" \u2192 {"translatedText": "science exam", "keyword": "science"}`
+        },
+        {
+          role: "user",
+          content: text2
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      max_tokens: 150
+    });
+    const result = JSON.parse(response.choices[0].message.content || '{"translatedText": "", "keyword": ""}');
+    const translatedText = result.translatedText?.trim() || text2;
+    const keyword = result.keyword?.trim() || translatedText;
+    console.log(`[Translation] Original: "${text2}" \u2192 Translated: "${translatedText}" (Keyword: "${keyword}")`);
+    return {
+      translatedText,
+      keyword
+    };
+  } catch (error) {
+    console.error("Translation error:", error);
+    return { translatedText: text2, keyword: text2 };
+  }
+}
+
 // server/routers.ts
 var BASE_URL2 = "https://portal.myschoolct.com";
 function buildSearchUrl(aiResponse) {
@@ -910,7 +964,9 @@ var appRouter = router({
     })).mutation(async ({ input }) => {
       const { message, sessionId, language, history } = input;
       try {
-        const correctedMessage = correctSpelling(message);
+        const translationResult = await translateAndExtractKeyword(message);
+        const translatedMessage = translationResult.translatedText;
+        const correctedMessage = correctSpelling(translatedMessage);
         const aiResponse = await getAIResponse(correctedMessage, history || []);
         let resourceUrl = buildSearchUrl(aiResponse);
         let resourceName = "";
@@ -928,7 +984,7 @@ var appRouter = router({
         if (aiResponse.searchQuery) {
           logSearchQuery({
             query: message,
-            translatedQuery: correctedMessage !== message ? correctedMessage : null,
+            translatedQuery: translatedMessage !== message ? translatedMessage : null,
             language: language || "en",
             resultsFound: resourceUrl ? 1 : 0,
             topResultUrl: resourceUrl,
