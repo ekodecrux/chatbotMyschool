@@ -1047,6 +1047,7 @@ var appRouter = router({
         let thumbnails = [];
         let usedFallback = false;
         if (aiResponse.searchType === "direct_search" && aiResponse.searchQuery) {
+          console.log(`\u{1F50D} Direct search for: "${aiResponse.searchQuery}"`);
           const portalResults = await fetchPortalResults(aiResponse.searchQuery, 6);
           if (portalResults.results.length === 0) {
             console.log(`Zero results for "${aiResponse.searchQuery}", using fallback`);
@@ -1058,6 +1059,7 @@ var appRouter = router({
             }
           } else {
             thumbnails = portalResults.results;
+            console.log(`\u2705 Found ${thumbnails.length} portal results for "${aiResponse.searchQuery}"`);
           }
           if (thumbnails.length > 0) {
             resourceName = usedFallback ? `Showing related resources (${thumbnails.length} found)` : `${thumbnails.length} resources found`;
@@ -1067,7 +1069,8 @@ var appRouter = router({
             resourceName = "Explore educational resources";
             resourceDescription = "Browse our collection of learning materials";
           }
-        } else if (aiResponse.searchQuery && aiResponse.searchType !== "greeting") {
+        } else if (aiResponse.searchQuery && aiResponse.searchType !== "greeting" && aiResponse.searchType !== "direct_search") {
+          console.log(`\u{1F50D} Using performPrioritySearch for class_subject query: "${aiResponse.searchQuery}"`);
           const searchResults = performPrioritySearch(aiResponse.searchQuery);
           if (searchResults.length > 0) {
             resourceUrl = searchResults[0].url;

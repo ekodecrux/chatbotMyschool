@@ -131,8 +131,9 @@ export const appRouter = router({
           let thumbnails: PortalResult[] = [];
           let usedFallback = false;
 
-          // For direct searches, fetch portal results with thumbnails
+          // ===== CRITICAL FIX: For direct_search, ONLY use portal API =====
           if (aiResponse.searchType === "direct_search" && aiResponse.searchQuery) {
+            console.log(`🔍 Direct search for: "${aiResponse.searchQuery}"`);
             const portalResults = await fetchPortalResults(aiResponse.searchQuery, 6);
             
             // CRITICAL: If no results, try fallback searches
@@ -148,6 +149,7 @@ export const appRouter = router({
               }
             } else {
               thumbnails = portalResults.results;
+              console.log(`✅ Found ${thumbnails.length} portal results for "${aiResponse.searchQuery}"`);
             }
             
             // Build resource info
@@ -162,8 +164,9 @@ export const appRouter = router({
               resourceName = "Explore educational resources";
               resourceDescription = "Browse our collection of learning materials";
             }
-          } else if (aiResponse.searchQuery && aiResponse.searchType !== "greeting") {
-            // Fallback to priority search for class_subject
+          } else if (aiResponse.searchQuery && aiResponse.searchType !== "greeting" && aiResponse.searchType !== "direct_search") {
+            // ===== CRITICAL FIX: ONLY use performPrioritySearch for class_subject, NOT for direct_search =====
+            console.log(`🔍 Using performPrioritySearch for class_subject query: "${aiResponse.searchQuery}"`);
             const searchResults = performPrioritySearch(aiResponse.searchQuery);
             if (searchResults.length > 0) {
               resourceUrl = searchResults[0].url;
