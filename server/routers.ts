@@ -5,7 +5,7 @@ import { getAIResponse } from "./groqAI";
 import { saveChatMessage } from "./chatbotDb";
 import { logSearchQuery } from "./analyticsDb";
 import { translateAndExtractKeyword } from "./translation_util";
-import { advancedSearch, enhanceSearchQuery, autoCorrect } from "./advancedSearch";
+import { advancedSearch, enhanceSearchQuery } from "./advancedSearch";
 
 const BASE_URL = "https://portal.myschoolct.com";
 const PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
@@ -23,200 +23,215 @@ interface PortalSearchResponse {
   results: PortalResult[];
   total: number;
   query: string;
-  expanded_terms?: string[];
+  expanded_terms: string[];
 }
 
-async function fetchPortalResults(query: string, size: number = 6): Promise<PortalSearchResponse> {
+/**
+ * CRITICAL: Portal Backend Search is ALWAYS PRIORITY
+ * Uses advanced search (fuzzy + soundex + synonyms) on portal API
+ */
+async function fetchPortalResults(query: string, size: number = 6): Promise<PortalResult[]> {
   try {
-    const response = await fetch(`${PORTAL_API}?query=${encodeURIComponent(query)}&size=${size}`);
-    if (!response.ok) {
-      console.error("Portal API error:", response.status);
-      return { results: [], total: 0, query };
-    }
-    return await response.json();
+    console.log(`🔍 [PORTAL PRIORITY] Fetching results with advanced search: "${query}"`);
+    
+    // Use advanced search with fuzzy matching, soundex, and synonyms
+    const results = await advancedSearch(query, PORTAL_API);
+    
+    console.log(`✅ [PORTAL] Advanced search returned ${results.length} results`);
+    return results || [];
   } catch (error) {
-    console.error("Failed to fetch portal results:", error);
-    return { results: [], total: 0, query };
+    console.error('❌ [PORTAL] Error in fetchPortalResults:', error);
+    return [];
   }
 }
 
-// Fallback search terms for common queries with no results
 const FALLBACK_SEARCHES: Record<string, string[]> = {
-  "default": ["animals", "flowers", "shapes", "numbers", "colors"],
-  "science": ["animals", "plants", "nature", "experiments"],
-  "maths": ["numbers", "shapes", "geometry", "addition"],
-  "english": ["alphabet", "words", "reading", "writing"],
-  "art": ["colors", "drawing", "painting", "shapes"],
-  "food": ["fruits", "vegetables", "food items"],
-  "nature": ["animals", "plants", "flowers", "trees"]
+  default: ["animals", "flowers", "shapes", "numbers", "colors"],
+  science: ["animals", "plants", "nature", "experiments"],
+  maths: ["numbers", "shapes", "geometry", "addition"],
+  english: ["alphabet", "words", "reading", "writing"],
+  art: ["colors", "drawing", "painting", "shapes"],
+  food: ["fruits", "vegetables", "food items"],
+  nature: ["animals", "plants", "flowers", "trees"],
 };
 
-async function findNearestResults(originalQuery: string): Promise<PortalSearchResponse> {
-  console.log(`No results for "${originalQuery}", trying fallback searches...`);
+async function findNearestResults(originalQuery: string): Promise<{ query: string; results: PortalResult[] }> {
+  const category = Object.keys(FALLBACK_SEARCHES).find(cat => 
+    originalQuery.toLowerCase().includes(cat)
+  ) || "default";
   
-  // Try related fallback terms
-  const lowerQuery = originalQuery.toLowerCase();
-  let fallbackTerms = FALLBACK_SEARCHES["default"];
+  const fallbacks = FALLBACK_SEARCHES[category];
   
-  // Find matching category
-  for (const [category, terms] of Object.entries(FALLBACK_SEARCHES)) {
-    if (lowerQuery.includes(category)) {
-      fallbackTerms = terms;
-      break;
+  for (const fallback of fallbacks) {
+    const results = await fetchPortalResults(fallback, 6);
+    if (results.length > 0) {
+      console.log(`✅ [FALLBACK] Found ${results.length} results for "${fallback}"`);
+      return { query: fallback, results };
     }
   }
   
-  // Try each fallback term
-  for (const term of fallbackTerms) {
-    const results = await fetchPortalResults(term, 6);
-    if (results.results.length > 0) {
-      console.log(`Found ${results.results.length} results for fallback term "${term}"`);
-      return results;
-    }
-  }
-  
-  // Last resort: try "educational resources"
-  return await fetchPortalResults("educational resources", 6);
+  const lastResort = await fetchPortalResults("educational resources", 6);
+  return { query: "educational resources", results: lastResort };
 }
 
+/**
+ * Build search URL - always use /views/result?text=... for direct searches
+ */
 function buildSearchUrl(aiResponse: any): string {
-  // For invalid/gibberish input, route to academic page
   if (aiResponse.searchType === "invalid") {
     return `${BASE_URL}/views/academic`;
   }
-  // For class-based queries, use simple class URL without parameters
+  
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
     return `${BASE_URL}/views/academic/class/class-${aiResponse.classNum}`;
   }
-  // For all other queries, use search results
+  
+  // FIXED: Use /views/result?text=... (NOT /views/sections/result)
   if (aiResponse.searchQuery) {
     return `${BASE_URL}/views/result?text=${encodeURIComponent(aiResponse.searchQuery)}`;
   }
+  
   return "";
 }
 
 export const appRouter = router({
   chatbot: router({
     autocomplete: publicProcedure
-      .input(z.object({ query: z.string(), language: z.string().optional() }))
+      .input(z.object({ query: z.string() }))
       .query(async ({ input }) => {
-        if (input.query.length < 2) return { resources: [], images: [] };
+        if (input.query.length < 2) {
+          return { resources: [], images: [] };
+        }
         return { resources: [], images: [] };
       }),
 
     chat: publicProcedure
-      .input(z.object({
-        message: z.string(),
-        sessionId: z.string(),
-        language: z.string().optional(),
-        history: z.array(z.object({ role: z.string(), content: z.string() })).optional()
-      }))
+      .input(
+        z.object({
+          message: z.string(),
+          sessionId: z.string(),
+          language: z.string().optional(),
+          history: z
+            .array(
+              z.object({
+                role: z.enum(["user", "assistant"]),
+                content: z.string(),
+              })
+            )
+            .optional(),
+        })
+      )
       .mutation(async ({ input }) => {
-        const { message, sessionId, language, history } = input;
-
         try {
-          // Step 1: Detect and translate non-English queries
-          const translationResult = await translateAndExtractKeyword(message);
-          const translatedMessage = translationResult.translatedText;
-          
-          // Step 2: Apply spell correction
-          const correctedMessage = correctSpelling(translatedMessage);
-          
-          // Step 3: Get AI response
-          const aiResponse = await getAIResponse(correctedMessage, history || []);
-          
-          // Step 4: Build URL and fetch thumbnails
+          const { message, sessionId, language = "en", history = [] } = input;
+
+          console.log(`\n🎯 === PORTAL PRIORITY SEARCH START ===`);
+          console.log(`📝 User message: "${message}"`);
+          console.log(`🌐 Language: ${language}`);
+
+          // Step 1: Translation
+          let translatedText = message;
+          if (language && language !== "en") {
+            const translationResult = await translateAndExtractKeyword(message, language);
+            translatedText = translationResult.translated || message;
+            console.log(`🌍 Translated "${message}" → "${translatedText}"`);
+          }
+
+          // Step 2: Spelling correction
+          const correctedText = await correctSpelling(translatedText);
+          console.log(`✏️ Spell-checked "${translatedText}" → "${correctedText}"`);
+
+          // Step 3: AI response
+          const aiResponse = await getAIResponse(correctedText, history);
+          console.log(`🤖 AI Response:`, aiResponse);
+
           let resourceUrl = buildSearchUrl(aiResponse);
           let resourceName = "";
           let resourceDescription = "";
-          let thumbnails: PortalResult[] = [];
-          let usedFallback = false;
+          let thumbnails: any[] = [];
 
-          // ===== CRITICAL FIX: For direct_search, ONLY use portal API =====
-          if (aiResponse.searchType === "direct_search" && aiResponse.searchQuery) {
-            console.log(`🔍 Direct search for: "${aiResponse.searchQuery}"`);
-            const portalResults = await fetchPortalResults(aiResponse.searchQuery, 6);
+          // ===== CRITICAL: PORTAL BACKEND SEARCH IS ALWAYS PRIORITY =====
+          // For ANY searchQuery, fetch from portal first with advanced search
+          if (aiResponse.searchQuery) {
+            console.log(`\n🔍 [PORTAL PRIORITY] Searching for: "${aiResponse.searchQuery}"`);
             
-            // CRITICAL: If no results, try fallback searches
-            if (portalResults.results.length === 0) {
-              console.log(`Zero results for "${aiResponse.searchQuery}", using fallback`);
-              const fallbackResults = await findNearestResults(aiResponse.searchQuery);
-              thumbnails = fallbackResults.results;
-              usedFallback = true;
+            // ALWAYS fetch portal results with advanced search (fuzzy + soundex + synonyms)
+            let portalResults = await fetchPortalResults(aiResponse.searchQuery, 6);
+            
+            // If no results, try fallback
+            if (portalResults.length === 0) {
+              console.log(`⚠️ Zero portal results for "${aiResponse.searchQuery}", trying fallback...`);
+              const fallback = await findNearestResults(aiResponse.searchQuery);
+              portalResults = fallback.results;
               
-              // Update URL to show fallback search term if we have results
-              if (thumbnails.length > 0) {
-                resourceUrl = `${BASE_URL}/views/result?text=${encodeURIComponent(fallbackResults.query)}`;
+              if (portalResults.length > 0) {
+                // Update URL to show fallback query
+                resourceUrl = `${BASE_URL}/views/result?text=${encodeURIComponent(fallback.query)}`;
               }
-            } else {
-              thumbnails = portalResults.results;
-              console.log(`✅ Found ${thumbnails.length} portal results for "${aiResponse.searchQuery}"`);
             }
-            
-            // Build resource info
-            if (thumbnails.length > 0) {
-              resourceName = usedFallback 
-                ? `Showing related resources (${thumbnails.length} found)` 
-                : `${thumbnails.length} resources found`;
-              resourceDescription = thumbnails.map(r => r.title).slice(0, 3).join(", ");
+
+            // Build thumbnails array from portal results
+            thumbnails = portalResults.map(r => ({
+              url: r.path,
+              thumbnail: r.thumbnail,
+              title: r.title,
+              category: r.category,
+            }));
+
+            // Build resource name and description
+            if (portalResults.length > 0) {
+              resourceName = `${portalResults.length} resources found`;
+              resourceDescription = portalResults
+                .slice(0, 3)
+                .map(r => r.title)
+                .join("\n");
+              
+              console.log(`✅ [PORTAL] Returning ${portalResults.length} results with thumbnails`);
             } else {
-              // Absolute fallback: if still no results, show generic educational content
-              resourceUrl = `${BASE_URL}/views/result?text=educational+resources`;
               resourceName = "Explore educational resources";
               resourceDescription = "Browse our collection of learning materials";
-            }
-          } else if (aiResponse.searchQuery && aiResponse.searchType !== "greeting" && aiResponse.searchType !== "direct_search") {
-            // ===== CRITICAL FIX: ONLY use performPrioritySearch for class_subject, NOT for direct_search =====
-            console.log(`🔍 Using performPrioritySearch for class_subject query: "${aiResponse.searchQuery}"`);
-            const searchResults = performPrioritySearch(aiResponse.searchQuery);
-            if (searchResults.length > 0) {
-              resourceUrl = searchResults[0].url;
-              resourceName = searchResults[0].name;
-              resourceDescription = searchResults[0].description;
+              resourceUrl = `${BASE_URL}/views/academic`;
             }
           }
 
-          // Save to DB
-          saveChatMessage({ sessionId, role: "user", message, language: language || "en" });
-          saveChatMessage({ sessionId, role: "assistant", message: aiResponse.message, language: language || "en" });
+          // Save chat messages
+          await saveChatMessage(sessionId, "user", message, language || "en");
+          await saveChatMessage(sessionId, "assistant", aiResponse.message, "en");
 
+          // Log search
           if (aiResponse.searchQuery) {
-            logSearchQuery({
-              query: message,
-              translatedQuery: translatedMessage !== message ? translatedMessage : null,
+            await logSearchQuery({
+              sessionId,
+              query: aiResponse.searchQuery,
+              translatedQuery: translatedText !== message ? translatedText : null,
               language: language || "en",
-              resultsFound: thumbnails.length || (resourceUrl ? 1 : 0),
-              topResultUrl: resourceUrl,
-              topResultName: resourceName,
-              sessionId
+              resultsCount: thumbnails.length,
+              topResultUrl: resourceUrl || null,
+              topResultName: resourceName || null,
             });
           }
+
+          console.log(`✅ === PORTAL PRIORITY SEARCH COMPLETE ===\n`);
 
           return {
             response: aiResponse.message,
             resourceUrl,
             resourceName,
             resourceDescription,
-            suggestions: aiResponse.suggestions,
+            suggestions: aiResponse.suggestions || [],
             searchType: aiResponse.searchType,
-            thumbnails: thumbnails.map(t => ({
-              url: t.path,
-              thumbnail: t.thumbnail,
-              title: t.title,
-              category: t.category
-            }))
+            thumbnails,
           };
-
         } catch (error) {
-          console.error("Chat error:", error);
+          console.error("❌ Chat error:", error);
           return {
-            response: "I am here to help! What educational resources are you looking for?",
+            response: "Hello! I'm your MySchool Assistant. How can I help you today?",
             resourceUrl: "",
             resourceName: "",
             resourceDescription: "",
-            suggestions: ["Animals", "Class 5 Maths", "Exam Tips"],
+            suggestions: ["Class 5 Maths", "Exam Tips", "Animals"],
             searchType: "greeting",
-            thumbnails: []
+            thumbnails: [],
           };
         }
       }),

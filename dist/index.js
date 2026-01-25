@@ -470,69 +470,6 @@ var adminProcedure = t.procedure.use(
   })
 );
 
-// server/myschool_knowledge_base.json
-var myschool_knowledge_base_default = {
-  base_url: "https://portal.myschoolct.com",
-  sections: {
-    academic: {
-      name: "Academic",
-      url: "/views/academic",
-      description: "Access academic resources by class and subject",
-      keywords: ["academic"],
-      subsections: {
-        grades: {
-          description: "Classes 1-10 curriculum",
-          subjects: {
-            computer: { code: "com", keywords: ["computer", "computers", "computing", "coding", "programming"] },
-            english: { code: "eng", keywords: ["english", "grammar"] },
-            evs: { code: "evs", keywords: ["evs", "environmental studies", "environment"] },
-            hindi: { code: "hin", keywords: ["hindi"] },
-            maths: { code: "mat", keywords: ["maths", "mathematics", "math"] },
-            science: { code: "sci", keywords: ["science", "physics", "chemistry", "biology"] },
-            social: { code: "soc", keywords: ["social", "social studies", "history", "geography", "civics"] },
-            telugu: { code: "tel", keywords: ["telugu"] }
-          }
-        },
-        one_click_resources: {
-          description: "One Click Resource Centre",
-          resources: [
-            {
-              name: "Smart Wall",
-              url: "/views/academic/smart-wall?ocrc",
-              keywords: ["smart wall", "smartwall", "class decoration", "classroom decoration"]
-            },
-            {
-              name: "Image Bank",
-              url: "/views/sections/image-bank",
-              keywords: ["image bank", "imagebank"]
-            },
-            {
-              name: "Exam Tips",
-              url: "/views/academic/result?text=exam tips",
-              keywords: ["exam tips", "examtips"]
-            },
-            {
-              name: "MCQ Bank",
-              url: "/views/academic/result?text=mcq",
-              keywords: ["mcq bank", "mcqbank", "mcq"]
-            },
-            {
-              name: "Visual Worksheets",
-              url: "/views/academic/result?text=visual worksheets",
-              keywords: ["visual worksheets", "visual worksheet"]
-            },
-            {
-              name: "Pictorial Stories",
-              url: "/views/academic/result?text=pictorial stories",
-              keywords: ["pictorial stories", "pictorial story"]
-            }
-          ]
-        }
-      }
-    }
-  }
-};
-
 // server/enhancedSemanticSearch.ts
 function soundex(str) {
   const s = str.toUpperCase().replace(/[^A-Z]/g, "");
@@ -724,98 +661,6 @@ function correctSpelling(query) {
   });
   return corrected.join(" ");
 }
-var BASE_URL = "https://portal.myschoolct.com";
-function isExactOneClickMatch(query, keywords) {
-  const qLower = query.toLowerCase().trim();
-  for (const kw of keywords) {
-    const kwLower = kw.toLowerCase();
-    if (qLower === kwLower) return true;
-    if (qLower.split(" ").join("") === kwLower.split(" ").join("")) return true;
-  }
-  return false;
-}
-function extractClassNumber(query) {
-  const patterns = [/(\d+)(?:st|nd|rd|th)?\s*(?:class|grade|std)/i, /(?:class|grade|std)\s*(\d+)/i];
-  for (const p of patterns) {
-    const m = query.match(p);
-    if (m) {
-      const v = parseInt(m[1]);
-      if (v >= 1 && v <= 10) return v;
-    }
-  }
-  return null;
-}
-function extractSubject(query) {
-  const subjects = myschool_knowledge_base_default.sections.academic.subsections.grades.subjects;
-  const qLower = query.toLowerCase();
-  for (const [name, data] of Object.entries(subjects)) {
-    for (const kw of data.keywords) {
-      if (qLower.includes(kw.toLowerCase())) return name;
-    }
-  }
-  return null;
-}
-function isMeaningless(q) {
-  q = q.trim().toLowerCase();
-  if (q.length < 2) return true;
-  if (!/[a-zA-Z]/.test(q)) return true;
-  if (!/[aeiou]/i.test(q)) return true;
-  if (q.length < 6) {
-    const gibberish = ["xyz", "qwer", "asdf", "zxcv", "hjkl", "bnm"];
-    for (const g of gibberish) if (q.includes(g)) return true;
-  }
-  return false;
-}
-function performPrioritySearch(query) {
-  const correctedQuery = correctSpelling(query);
-  const qLower = correctedQuery.toLowerCase().trim();
-  const oneClick = myschool_knowledge_base_default.sections.academic.subsections.one_click_resources.resources;
-  for (const r of oneClick) {
-    if (isExactOneClickMatch(qLower, r.keywords)) {
-      return [{ name: r.name, description: r.keywords.join(", "), url: BASE_URL + r.url, category: "one_click", confidence: 0.99 }];
-    }
-  }
-  const classNum = extractClassNumber(correctedQuery);
-  if (classNum) {
-    const subject = extractSubject(correctedQuery);
-    if (subject) {
-      const subjects = myschool_knowledge_base_default.sections.academic.subsections.grades.subjects;
-      const subjectData = subjects[subject];
-      if (subjectData && subjectData.code !== "unknown") {
-        return [{
-          name: "Class " + classNum + " " + subject.charAt(0).toUpperCase() + subject.slice(1),
-          description: "Access Class " + classNum + " " + subject + " curriculum",
-          url: BASE_URL + "/views/academic/class/class-" + classNum + "?main=1&mu=" + subjectData.code,
-          category: "class_subject",
-          confidence: 0.95
-        }];
-      }
-    }
-    return [{
-      name: "Class " + classNum + " Resources",
-      description: "All Class " + classNum + " resources",
-      url: BASE_URL + "/views/academic/class/class-" + classNum,
-      category: "class_subject",
-      confidence: 0.9
-    }];
-  }
-  if (isMeaningless(correctedQuery)) {
-    return [{
-      name: "Browse Academic Resources",
-      description: "Explore all resources",
-      url: BASE_URL + "/views/academic",
-      category: "none",
-      confidence: 0
-    }];
-  }
-  return [{
-    name: "Search: " + correctedQuery,
-    description: "Searching for " + correctedQuery + " across all resources",
-    url: BASE_URL + "/views/sections/result?text=" + encodeURIComponent(qLower),
-    category: "search",
-    confidence: 0.5
-  }];
-}
 
 // server/groqAI.ts
 import Groq from "groq-sdk";
@@ -967,152 +812,374 @@ IMPORTANT: Translate single words directly. "\u0C2A\u0C02\u0C21\u0C41" means "fr
   }
 }
 
+// server/advancedSearch.ts
+function levenshteinDistance(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+function fuzzyMatch(query, target, threshold = 0.7) {
+  const distance = levenshteinDistance(query.toLowerCase(), target.toLowerCase());
+  const maxLength = Math.max(query.length, target.length);
+  const similarity = 1 - distance / maxLength;
+  return similarity >= threshold;
+}
+function soundex2(s) {
+  const a = s.toLowerCase().split("");
+  const firstLetter = a[0];
+  const codes = {
+    a: "",
+    e: "",
+    i: "",
+    o: "",
+    u: "",
+    h: "",
+    w: "",
+    y: "",
+    b: "1",
+    f: "1",
+    p: "1",
+    v: "1",
+    c: "2",
+    g: "2",
+    j: "2",
+    k: "2",
+    q: "2",
+    s: "2",
+    x: "2",
+    z: "2",
+    d: "3",
+    t: "3",
+    l: "4",
+    m: "5",
+    n: "5",
+    r: "6"
+  };
+  const coded = a.map((letter) => codes[letter] || "").filter((code, index) => index === 0 || code !== a[index - 1]).join("").replace(/0/g, "").substring(0, 4);
+  return (firstLetter + coded + "000").substring(0, 4).toUpperCase();
+}
+var SYNONYMS = {
+  // Animals
+  "animal": ["animals", "creature", "creatures", "beast", "wildlife"],
+  "monkey": ["monkeys", "ape", "primate", "chimp"],
+  "dog": ["dogs", "puppy", "puppies", "canine"],
+  "cat": ["cats", "kitten", "kittens", "feline"],
+  "bird": ["birds", "avian", "fowl"],
+  "fish": ["fishes", "aquatic"],
+  "elephant": ["elephants", "pachyderm"],
+  "lion": ["lions", "leo"],
+  "tiger": ["tigers"],
+  // Plants & Nature
+  "fruit": ["fruits", "fruut", "froot"],
+  "flower": ["flowers", "blossom", "bloom"],
+  "plant": ["plants", "vegetation", "flora"],
+  "tree": ["trees", "woods", "forest"],
+  "vegetable": ["vegetables", "veggies"],
+  // Education
+  "exam": ["exams", "test", "tests", "examination", "quiz", "assessment"],
+  "study": ["studies", "learn", "learning", "education"],
+  "book": ["books", "textbook", "reading"],
+  "lesson": ["lessons", "class", "lecture"],
+  "homework": ["assignment", "work", "task"],
+  "question": ["questions", "query", "queries"],
+  "answer": ["answers", "solution", "solutions"],
+  // Subjects
+  "maths": ["math", "mathematics", "arithmetic", "calculation"],
+  "science": ["sciences", "scientific", "biology", "physics", "chemistry"],
+  "english": ["language", "grammar", "vocabulary"],
+  "hindi": ["\u0939\u093F\u0902\u0926\u0940"],
+  "telugu": ["\u0C24\u0C46\u0C32\u0C41\u0C17\u0C41"],
+  // Art & Creativity
+  "color": ["colors", "colour", "colours", "shade", "hue"],
+  "draw": ["drawing", "sketch", "art"],
+  "paint": ["painting", "artwork"],
+  "picture": ["pictures", "image", "images", "photo", "photos"],
+  // Shapes & Numbers
+  "shape": ["shapes", "geometry", "geometric"],
+  "number": ["numbers", "numeral", "digit", "digits"],
+  "circle": ["circles", "round"],
+  "square": ["squares"],
+  "triangle": ["triangles"],
+  // Actions
+  "write": ["writing", "written", "compose"],
+  "read": ["reading", "comprehension"],
+  "count": ["counting", "enumerate"],
+  "add": ["addition", "plus", "sum"],
+  "subtract": ["subtraction", "minus", "difference"],
+  // Interview/Career
+  "interview": ["interviews", "exam tips", "preparation", "tips"]
+};
+function expandWithSynonyms(query) {
+  const words = query.toLowerCase().split(/\s+/);
+  const expanded = /* @__PURE__ */ new Set([query.toLowerCase()]);
+  words.forEach((word) => {
+    expanded.add(word);
+    if (SYNONYMS[word]) {
+      SYNONYMS[word].forEach((syn) => expanded.add(syn));
+    }
+    Object.entries(SYNONYMS).forEach(([key, syns]) => {
+      if (syns.includes(word)) {
+        expanded.add(key);
+        syns.forEach((s) => expanded.add(s));
+      }
+    });
+    Object.entries(SYNONYMS).forEach(([key, syns]) => {
+      if (fuzzyMatch(word, key, 0.8)) {
+        expanded.add(key);
+        syns.forEach((s) => expanded.add(s));
+      }
+    });
+  });
+  return Array.from(expanded);
+}
+var COMMON_TYPOS = {
+  "monky": "monkey",
+  "monkee": "monkey",
+  "munkee": "monkey",
+  "fruut": "fruit",
+  "froot": "fruit",
+  "anamil": "animal",
+  "animl": "animal",
+  "collor": "color",
+  "colur": "color",
+  "shap": "shape",
+  "numbr": "number",
+  "numbere": "number",
+  "exm": "exam",
+  "tets": "test",
+  "studie": "study",
+  "scince": "science",
+  "sceince": "science",
+  "mtah": "maths",
+  "maht": "maths",
+  "englsh": "english",
+  "engilsh": "english"
+};
+function autoCorrect(query) {
+  const words = query.toLowerCase().split(/\s+/);
+  const corrected = words.map((word) => {
+    if (COMMON_TYPOS[word]) {
+      return COMMON_TYPOS[word];
+    }
+    for (const [typo, correct] of Object.entries(COMMON_TYPOS)) {
+      if (fuzzyMatch(word, typo, 0.9)) {
+        return correct;
+      }
+    }
+    for (const key of Object.keys(SYNONYMS)) {
+      if (fuzzyMatch(word, key, 0.85)) {
+        return key;
+      }
+    }
+    return word;
+  });
+  return corrected.join(" ");
+}
+function enhanceSearchQuery(query) {
+  const corrected = autoCorrect(query);
+  const expanded = expandWithSynonyms(corrected);
+  const soundexCodes = expanded.map((term) => soundex2(term));
+  return {
+    original: query,
+    corrected,
+    expanded,
+    soundexCodes: Array.from(new Set(soundexCodes))
+  };
+}
+async function advancedSearch(query, portalAPI = "https://portal.myschoolct.com/api/rest/search/global") {
+  const enhanced = enhanceSearchQuery(query);
+  console.log(`\u{1F50D} Advanced Search:`, {
+    original: enhanced.original,
+    corrected: enhanced.corrected,
+    expanded: enhanced.expanded.slice(0, 5)
+  });
+  for (const term of enhanced.expanded) {
+    try {
+      const url = `${portalAPI}?query=${encodeURIComponent(term)}&size=6`;
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (data.results && data.results.length > 0) {
+        console.log(`\u2705 Found ${data.results.length} results for "${term}"`);
+        return data.results;
+      }
+    } catch (error) {
+      console.error(`\u274C Error searching for "${term}":`, error);
+    }
+  }
+  console.log(`\u26A0\uFE0F No results found for any expanded terms`);
+  return [];
+}
+
 // server/routers.ts
-var BASE_URL2 = "https://portal.myschoolct.com";
+var BASE_URL = "https://portal.myschoolct.com";
 var PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
 async function fetchPortalResults(query, size = 6) {
   try {
-    const response = await fetch(`${PORTAL_API}?query=${encodeURIComponent(query)}&size=${size}`);
-    if (!response.ok) {
-      console.error("Portal API error:", response.status);
-      return { results: [], total: 0, query };
-    }
-    return await response.json();
+    console.log(`\u{1F50D} [PORTAL PRIORITY] Fetching results with advanced search: "${query}"`);
+    const results = await advancedSearch(query, PORTAL_API);
+    console.log(`\u2705 [PORTAL] Advanced search returned ${results.length} results`);
+    return results || [];
   } catch (error) {
-    console.error("Failed to fetch portal results:", error);
-    return { results: [], total: 0, query };
+    console.error("\u274C [PORTAL] Error in fetchPortalResults:", error);
+    return [];
   }
 }
 var FALLBACK_SEARCHES = {
-  "default": ["animals", "flowers", "shapes", "numbers", "colors"],
-  "science": ["animals", "plants", "nature", "experiments"],
-  "maths": ["numbers", "shapes", "geometry", "addition"],
-  "english": ["alphabet", "words", "reading", "writing"],
-  "art": ["colors", "drawing", "painting", "shapes"],
-  "food": ["fruits", "vegetables", "food items"],
-  "nature": ["animals", "plants", "flowers", "trees"]
+  default: ["animals", "flowers", "shapes", "numbers", "colors"],
+  science: ["animals", "plants", "nature", "experiments"],
+  maths: ["numbers", "shapes", "geometry", "addition"],
+  english: ["alphabet", "words", "reading", "writing"],
+  art: ["colors", "drawing", "painting", "shapes"],
+  food: ["fruits", "vegetables", "food items"],
+  nature: ["animals", "plants", "flowers", "trees"]
 };
 async function findNearestResults(originalQuery) {
-  console.log(`No results for "${originalQuery}", trying fallback searches...`);
-  const lowerQuery = originalQuery.toLowerCase();
-  let fallbackTerms = FALLBACK_SEARCHES["default"];
-  for (const [category, terms] of Object.entries(FALLBACK_SEARCHES)) {
-    if (lowerQuery.includes(category)) {
-      fallbackTerms = terms;
-      break;
+  const category = Object.keys(FALLBACK_SEARCHES).find(
+    (cat) => originalQuery.toLowerCase().includes(cat)
+  ) || "default";
+  const fallbacks = FALLBACK_SEARCHES[category];
+  for (const fallback of fallbacks) {
+    const results = await fetchPortalResults(fallback, 6);
+    if (results.length > 0) {
+      console.log(`\u2705 [FALLBACK] Found ${results.length} results for "${fallback}"`);
+      return { query: fallback, results };
     }
   }
-  for (const term of fallbackTerms) {
-    const results = await fetchPortalResults(term, 6);
-    if (results.results.length > 0) {
-      console.log(`Found ${results.results.length} results for fallback term "${term}"`);
-      return results;
-    }
-  }
-  return await fetchPortalResults("educational resources", 6);
+  const lastResort = await fetchPortalResults("educational resources", 6);
+  return { query: "educational resources", results: lastResort };
 }
 function buildSearchUrl(aiResponse) {
   if (aiResponse.searchType === "invalid") {
-    return `${BASE_URL2}/views/academic`;
+    return `${BASE_URL}/views/academic`;
   }
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
-    return `${BASE_URL2}/views/academic/class/class-${aiResponse.classNum}`;
+    return `${BASE_URL}/views/academic/class/class-${aiResponse.classNum}`;
   }
   if (aiResponse.searchQuery) {
-    return `${BASE_URL2}/views/result?text=${encodeURIComponent(aiResponse.searchQuery)}`;
+    return `${BASE_URL}/views/result?text=${encodeURIComponent(aiResponse.searchQuery)}`;
   }
   return "";
 }
 var appRouter = router({
   chatbot: router({
-    autocomplete: publicProcedure.input(z.object({ query: z.string(), language: z.string().optional() })).query(async ({ input }) => {
-      if (input.query.length < 2) return { resources: [], images: [] };
+    autocomplete: publicProcedure.input(z.object({ query: z.string() })).query(async ({ input }) => {
+      if (input.query.length < 2) {
+        return { resources: [], images: [] };
+      }
       return { resources: [], images: [] };
     }),
-    chat: publicProcedure.input(z.object({
-      message: z.string(),
-      sessionId: z.string(),
-      language: z.string().optional(),
-      history: z.array(z.object({ role: z.string(), content: z.string() })).optional()
-    })).mutation(async ({ input }) => {
-      const { message, sessionId, language, history } = input;
+    chat: publicProcedure.input(
+      z.object({
+        message: z.string(),
+        sessionId: z.string(),
+        language: z.string().optional(),
+        history: z.array(
+          z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string()
+          })
+        ).optional()
+      })
+    ).mutation(async ({ input }) => {
       try {
-        const translationResult = await translateAndExtractKeyword(message);
-        const translatedMessage = translationResult.translatedText;
-        const correctedMessage = correctSpelling(translatedMessage);
-        const aiResponse = await getAIResponse(correctedMessage, history || []);
+        const { message, sessionId, language = "en", history = [] } = input;
+        console.log(`
+\u{1F3AF} === PORTAL PRIORITY SEARCH START ===`);
+        console.log(`\u{1F4DD} User message: "${message}"`);
+        console.log(`\u{1F310} Language: ${language}`);
+        let translatedText = message;
+        if (language && language !== "en") {
+          const translationResult = await translateAndExtractKeyword(message, language);
+          translatedText = translationResult.translated || message;
+          console.log(`\u{1F30D} Translated "${message}" \u2192 "${translatedText}"`);
+        }
+        const correctedText = await correctSpelling(translatedText);
+        console.log(`\u270F\uFE0F Spell-checked "${translatedText}" \u2192 "${correctedText}"`);
+        const aiResponse = await getAIResponse(correctedText, history);
+        console.log(`\u{1F916} AI Response:`, aiResponse);
         let resourceUrl = buildSearchUrl(aiResponse);
         let resourceName = "";
         let resourceDescription = "";
         let thumbnails = [];
-        let usedFallback = false;
-        if (aiResponse.searchType === "direct_search" && aiResponse.searchQuery) {
-          console.log(`\u{1F50D} Direct search for: "${aiResponse.searchQuery}"`);
-          const portalResults = await fetchPortalResults(aiResponse.searchQuery, 6);
-          if (portalResults.results.length === 0) {
-            console.log(`Zero results for "${aiResponse.searchQuery}", using fallback`);
-            const fallbackResults = await findNearestResults(aiResponse.searchQuery);
-            thumbnails = fallbackResults.results;
-            usedFallback = true;
-            if (thumbnails.length > 0) {
-              resourceUrl = `${BASE_URL2}/views/result?text=${encodeURIComponent(fallbackResults.query)}`;
+        if (aiResponse.searchQuery) {
+          console.log(`
+\u{1F50D} [PORTAL PRIORITY] Searching for: "${aiResponse.searchQuery}"`);
+          let portalResults = await fetchPortalResults(aiResponse.searchQuery, 6);
+          if (portalResults.length === 0) {
+            console.log(`\u26A0\uFE0F Zero portal results for "${aiResponse.searchQuery}", trying fallback...`);
+            const fallback = await findNearestResults(aiResponse.searchQuery);
+            portalResults = fallback.results;
+            if (portalResults.length > 0) {
+              resourceUrl = `${BASE_URL}/views/result?text=${encodeURIComponent(fallback.query)}`;
             }
-          } else {
-            thumbnails = portalResults.results;
-            console.log(`\u2705 Found ${thumbnails.length} portal results for "${aiResponse.searchQuery}"`);
           }
-          if (thumbnails.length > 0) {
-            resourceName = usedFallback ? `Showing related resources (${thumbnails.length} found)` : `${thumbnails.length} resources found`;
-            resourceDescription = thumbnails.map((r) => r.title).slice(0, 3).join(", ");
+          thumbnails = portalResults.map((r) => ({
+            url: r.path,
+            thumbnail: r.thumbnail,
+            title: r.title,
+            category: r.category
+          }));
+          if (portalResults.length > 0) {
+            resourceName = `${portalResults.length} resources found`;
+            resourceDescription = portalResults.slice(0, 3).map((r) => r.title).join("\n");
+            console.log(`\u2705 [PORTAL] Returning ${portalResults.length} results with thumbnails`);
           } else {
-            resourceUrl = `${BASE_URL2}/views/result?text=educational+resources`;
             resourceName = "Explore educational resources";
             resourceDescription = "Browse our collection of learning materials";
-          }
-        } else if (aiResponse.searchQuery && aiResponse.searchType !== "greeting" && aiResponse.searchType !== "direct_search") {
-          console.log(`\u{1F50D} Using performPrioritySearch for class_subject query: "${aiResponse.searchQuery}"`);
-          const searchResults = performPrioritySearch(aiResponse.searchQuery);
-          if (searchResults.length > 0) {
-            resourceUrl = searchResults[0].url;
-            resourceName = searchResults[0].name;
-            resourceDescription = searchResults[0].description;
+            resourceUrl = `${BASE_URL}/views/academic`;
           }
         }
-        saveChatMessage({ sessionId, role: "user", message, language: language || "en" });
-        saveChatMessage({ sessionId, role: "assistant", message: aiResponse.message, language: language || "en" });
+        await saveChatMessage(sessionId, "user", message, language || "en");
+        await saveChatMessage(sessionId, "assistant", aiResponse.message, "en");
         if (aiResponse.searchQuery) {
-          logSearchQuery({
-            query: message,
-            translatedQuery: translatedMessage !== message ? translatedMessage : null,
+          await logSearchQuery({
+            sessionId,
+            query: aiResponse.searchQuery,
+            translatedQuery: translatedText !== message ? translatedText : null,
             language: language || "en",
-            resultsFound: thumbnails.length || (resourceUrl ? 1 : 0),
-            topResultUrl: resourceUrl,
-            topResultName: resourceName,
-            sessionId
+            resultsCount: thumbnails.length,
+            topResultUrl: resourceUrl || null,
+            topResultName: resourceName || null
           });
         }
+        console.log(`\u2705 === PORTAL PRIORITY SEARCH COMPLETE ===
+`);
         return {
           response: aiResponse.message,
           resourceUrl,
           resourceName,
           resourceDescription,
-          suggestions: aiResponse.suggestions,
+          suggestions: aiResponse.suggestions || [],
           searchType: aiResponse.searchType,
-          thumbnails: thumbnails.map((t2) => ({
-            url: t2.path,
-            thumbnail: t2.thumbnail,
-            title: t2.title,
-            category: t2.category
-          }))
+          thumbnails
         };
       } catch (error) {
-        console.error("Chat error:", error);
+        console.error("\u274C Chat error:", error);
         return {
-          response: "I am here to help! What educational resources are you looking for?",
+          response: "Hello! I'm your MySchool Assistant. How can I help you today?",
           resourceUrl: "",
           resourceName: "",
           resourceDescription: "",
-          suggestions: ["Animals", "Class 5 Maths", "Exam Tips"],
+          suggestions: ["Class 5 Maths", "Exam Tips", "Animals"],
           searchType: "greeting",
           thumbnails: []
         };
