@@ -8,71 +8,7 @@ import { translateAndExtractKeyword } from "./translation_util";
 import { advancedSearch, enhanceSearchQuery } from "./advancedSearch";
 
 const BASE_URL = "https://portal.myschoolct.com";
-
-/**
- * Extract unique image code from path (e.g., CTENIC0510001JPC from /path/to/CTENIC0510001JPC.jpg)
- */
-function extractImageCode(path: string): string {
-  const match = path.match(/([A-Z0-9]+)\.(jpg|jpeg|png|webp|gif)$/i);
-  return match ? match[1] : path;
-}
-
-/**
- * Deduplicate results by image code (removes .jpg/.webp duplicates)
- */
-function deduplicateResults(results: PortalResult[]): PortalResult[] {
-  const seen = new Set<string>();
-  return results.filter(r => {
-    const code = extractImageCode(r.path || r.thumbnail || '');
-    // Also use title as fallback for uniqueness
-    const uniqueKey = code || r.title;
-    if (seen.has(uniqueKey)) return false;
-    seen.add(uniqueKey);
-    return true;
-  });
-}
 const PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
-
-// Subject ID mappings for URL parameters
-// main=0 is CLASS, mu is the class index (0=KG, 1=Class1, etc.)
-// For subject-specific pages, we need different mu values based on content type
-const SUBJECT_MAPPINGS: Record<string, number> = {
-  // Based on actual portal tab order: All(0), English(1), Maths(2), Science(3), Social(4), GK(5), Computer(6), Telugu(7), Hindi(8), Copy Writing(9)
-  'all': 0,
-  'english': 1,
-  'maths': 2,
-  'math': 2,
-  'mathematics': 2,
-  'science': 3,
-  'social': 4,
-  'social studies': 4,
-  'gk': 5,
-  'general knowledge': 5,
-  'computer': 6,
-  'computers': 6,
-  'telugu': 7,
-  'hindi': 8,
-  'copy writing': 9,
-  'copywriting': 9,
-  'evs': 3,  // EVS maps to Science
-  'environmental': 3,
-  'art': 0,  // Art shows all
-};
-
-// Class index mappings (mu parameter)
-const CLASS_INDEX: Record<number, number> = {
-  0: 0,  // KG
-  1: 1,  // Class 1
-  2: 2,  // Class 2
-  3: 3,  // Class 3
-  4: 4,  // Class 4
-  5: 5,  // Class 5
-  6: 6,  // Class 6
-  7: 7,  // Class 7
-  8: 8,  // Class 8
-  9: 9,  // Class 9
-  10: 10, // Class 10
-};
 
 interface PortalResult {
   path: string;
@@ -102,10 +38,7 @@ async function fetchPortalResults(query: string, size: number = 6): Promise<Port
     const results = await advancedSearch(query, PORTAL_API);
     
     console.log(`✅ [PORTAL] Advanced search returned ${results.length} results`);
-    // Deduplicate results by image code
-    const uniqueResults = deduplicateResults(results || []);
-    console.log(`✅ [PORTAL] After deduplication: ${uniqueResults.length} unique results`);
-    return uniqueResults;
+    return results || [];
   } catch (error) {
     console.error('❌ [PORTAL] Error in fetchPortalResults:', error);
     return [];
@@ -142,10 +75,16 @@ async function findNearestResults(originalQuery: string): Promise<{ query: strin
 }
 
 /**
- * Build search URL with proper parameters
- * Format: /views/academic/class/class-X?main=0&mu=Y
- * Where X is class number and Y is class index (or subject-specific)
+ * Build search URL - always use /views/result?text=... for direct searches
  */
+// Subject ID mappings for URL parameters
+const SUBJECT_MAPPINGS: Record<string, number> = {
+  'all': 0, 'english': 1, 'maths': 2, 'math': 2, 'mathematics': 2,
+  'science': 3, 'social': 4, 'social studies': 4,
+  'gk': 5, 'general knowledge': 5, 'computer': 6, 'computers': 6,
+  'telugu': 7, 'hindi': 8, 'copy writing': 9, 'evs': 3, 'environmental': 3,
+};
+
 function buildSearchUrl(aiResponse: any): string {
   if (aiResponse.searchType === "invalid") {
     return `${BASE_URL}/views/academic`;
@@ -153,19 +92,20 @@ function buildSearchUrl(aiResponse: any): string {
   
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
     const classNum = aiResponse.classNum;
-    const subject = (aiResponse.subject || '').toLowerCase();
-    const classIndex = CLASS_INDEX[classNum] || classNum;
+    let subject = (aiResponse.subject || '').toLowerCase();
     
-    // Build URL with subject filter if available
-    let url = `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${classIndex}`;
-    
-    // If subject is specified, try to add subject-specific parameter
-    if (subject && SUBJECT_MAPPINGS[subject] !== undefined) {
-      // For subject-specific content, update mu to subject mapping
-      url = `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${SUBJECT_MAPPINGS[subject]}`;
+    // Normalize subject (handle GK, EVS variations)
+    if (subject.includes('bank') || subject === 'gk' || subject.includes('general')) {
+      subject = 'gk';
+    } else if (subject === 'evs' || subject.includes('environmental')) {
+      subject = 'science';
+    } else if (subject === 'math' || subject === 'mathematics') {
+      subject = 'maths';
     }
     
-    return url;
+    // Build URL with subject filter
+    const mu = SUBJECT_MAPPINGS[subject] !== undefined ? SUBJECT_MAPPINGS[subject] : classNum;
+    return `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${mu}`;
   }
   
   // For direct searches, use /views/result?text=...
@@ -184,37 +124,7 @@ export const appRouter = router({
         if (input.query.length < 2) {
           return { resources: [], images: [] };
         }
-        
-        try {
-          console.log(`🔍 [AUTOCOMPLETE] Query: "${input.query}"`);
-          
-          // Fetch results from portal API
-          const portalResults = await fetchPortalResults(input.query, 6);
-          
-          // Filter only image results for thumbnails
-          const images = portalResults
-            .filter(r => r.type === 'image' || r.thumbnail?.match(/\.(jpg|jpeg|png|gif|webp)/i))
-            .map(r => ({
-              url: r.path,
-              thumbnail: r.thumbnail,
-              title: r.title,
-              category: r.category,
-            }));
-          
-          // Build resource suggestions
-          const resources = portalResults.slice(0, 5).map(r => ({
-            title: r.title,
-            path: r.path,
-            category: r.category,
-          }));
-          
-          console.log(`✅ [AUTOCOMPLETE] Found ${images.length} images, ${resources.length} resources`);
-          
-          return { resources, images };
-        } catch (error) {
-          console.error('❌ [AUTOCOMPLETE] Error:', error);
-          return { resources: [], images: [] };
-        }
+        return { resources: [], images: [] };
       }),
 
     chat: publicProcedure
@@ -257,66 +167,27 @@ export const appRouter = router({
           const aiResponse = await getAIResponse(correctedText, history);
           console.log(`🤖 AI Response:`, aiResponse);
 
-          // Normalize subject names (handle abbreviations and common variations)
-          if (aiResponse.subject) {
-            const subjectLower = aiResponse.subject.toLowerCase();
-            // Handle GK variations
-            if (subjectLower.includes('bank') || subjectLower === 'gk' || subjectLower.includes('general')) {
-              aiResponse.subject = 'gk';
-            }
-            // Handle EVS -> Science
-            if (subjectLower === 'evs' || subjectLower.includes('environmental')) {
-              aiResponse.subject = 'science';
-            }
-            // Handle Math variations
-            if (subjectLower === 'math' || subjectLower === 'mathematics') {
-              aiResponse.subject = 'maths';
-            }
-          }
-          
-          // Also check the original message for subject hints
-          const msgLower = correctedText.toLowerCase();
-          if (aiResponse.searchType === 'class_subject' && aiResponse.classNum) {
-            if (msgLower.includes(' gk') || msgLower.includes('general knowledge')) {
-              aiResponse.subject = 'gk';
-            }
-          }
-
           let resourceUrl = buildSearchUrl(aiResponse);
           let resourceName = "";
           let resourceDescription = "";
           let thumbnails: any[] = [];
-          
-          // Determine the search query to use
-          let effectiveSearchQuery = aiResponse.searchQuery;
-          
-          // For class_subject, construct a more specific search query
-          if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
-            const subject = aiResponse.subject || '';
-            // Make search more specific by including class and subject
-            effectiveSearchQuery = `class ${aiResponse.classNum} ${subject} charts`.trim();
-          }
 
           // ===== CRITICAL: PORTAL BACKEND SEARCH IS ALWAYS PRIORITY =====
-          if (effectiveSearchQuery) {
-            console.log(`\n🔍 [PORTAL PRIORITY] Searching for: "${effectiveSearchQuery}"`);
+          // For ANY searchQuery, fetch from portal first with advanced search
+          if (aiResponse.searchQuery) {
+            console.log(`\n🔍 [PORTAL PRIORITY] Searching for: "${aiResponse.searchQuery}"`);
             
-            let portalResults = await fetchPortalResults(effectiveSearchQuery, 6);
+            // ALWAYS fetch portal results with advanced search (fuzzy + soundex + synonyms)
+            let portalResults = await fetchPortalResults(aiResponse.searchQuery, 6);
             
-            // If no results for specific query, try broader search
-            if (portalResults.length === 0 && aiResponse.searchType === "class_subject") {
-              const broaderQuery = aiResponse.subject || `class ${aiResponse.classNum}`;
-              console.log(`⚠️ Zero results, trying broader: "${broaderQuery}"`);
-              portalResults = await fetchPortalResults(broaderQuery, 6);
-            }
-            
-            // If still no results, try fallback
+            // If no results, try fallback
             if (portalResults.length === 0) {
-              console.log(`⚠️ Zero portal results, trying fallback...`);
-              const fallback = await findNearestResults(effectiveSearchQuery);
+              console.log(`⚠️ Zero portal results for "${aiResponse.searchQuery}", trying fallback...`);
+              const fallback = await findNearestResults(aiResponse.searchQuery);
               portalResults = fallback.results;
               
               if (portalResults.length > 0) {
+                // Update URL to show fallback query
                 resourceUrl = `${BASE_URL}/views/result?text=${encodeURIComponent(fallback.query)}`;
               }
             }
@@ -329,6 +200,7 @@ export const appRouter = router({
               category: r.category,
             }));
 
+            // Build resource name and description
             if (portalResults.length > 0) {
               resourceName = `${portalResults.length} resources found`;
               resourceDescription = portalResults
@@ -346,8 +218,8 @@ export const appRouter = router({
 
           // Prepare final message
           let finalMessage = aiResponse.message;
-          if (thumbnails.length > 0 && aiResponse.searchType !== "class_subject") {
-            finalMessage = `Found ${thumbnails.length} results for "${aiResponse.searchQuery || effectiveSearchQuery}"`;
+          if (thumbnails.length > 0) {
+            finalMessage = `Found ${thumbnails.length} results for "${aiResponse.searchQuery}"`;
           }
 
           // Save chat messages
@@ -365,10 +237,10 @@ export const appRouter = router({
           });
 
           // Log search
-          if (effectiveSearchQuery) {
+          if (aiResponse.searchQuery) {
             await logSearchQuery({
               sessionId,
-              query: effectiveSearchQuery,
+              query: aiResponse.searchQuery,
               translatedQuery: translatedText !== message ? translatedText : null,
               language: language || "en",
               resultsCount: thumbnails.length,
@@ -379,6 +251,7 @@ export const appRouter = router({
 
           console.log(`✅ === PORTAL PRIORITY SEARCH COMPLETE ===\n`);
 
+          // Override AI message with portal results for better UX
           return {
             response: finalMessage,
             resourceUrl,
