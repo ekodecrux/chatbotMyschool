@@ -14,20 +14,26 @@ const PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
 // main=0 is CLASS, mu is the class index (0=KG, 1=Class1, etc.)
 // For subject-specific pages, we need different mu values based on content type
 const SUBJECT_MAPPINGS: Record<string, number> = {
-  'english': 0,
-  'maths': 1,
-  'math': 1,
-  'mathematics': 1,
-  'science': 8,
-  'social': 2,
-  'social studies': 2,
-  'telugu': 3,
-  'hindi': 4,
-  'evs': 5,
-  'environmental': 5,
-  'gk': 6,
-  'general knowledge': 6,
-  'art': 7,
+  // Based on actual portal tab order: All(0), English(1), Maths(2), Science(3), Social(4), GK(5), Computer(6), Telugu(7), Hindi(8), Copy Writing(9)
+  'all': 0,
+  'english': 1,
+  'maths': 2,
+  'math': 2,
+  'mathematics': 2,
+  'science': 3,
+  'social': 4,
+  'social studies': 4,
+  'gk': 5,
+  'general knowledge': 5,
+  'computer': 6,
+  'computers': 6,
+  'telugu': 7,
+  'hindi': 8,
+  'copy writing': 9,
+  'copywriting': 9,
+  'evs': 3,  // EVS maps to Science
+  'environmental': 3,
+  'art': 0,  // Art shows all
 };
 
 // Class index mappings (mu parameter)
@@ -194,6 +200,31 @@ export const appRouter = router({
           // Step 3: AI response
           const aiResponse = await getAIResponse(correctedText, history);
           console.log(`🤖 AI Response:`, aiResponse);
+
+          // Normalize subject names (handle abbreviations and common variations)
+          if (aiResponse.subject) {
+            const subjectLower = aiResponse.subject.toLowerCase();
+            // Handle GK variations
+            if (subjectLower.includes('bank') || subjectLower === 'gk' || subjectLower.includes('general')) {
+              aiResponse.subject = 'gk';
+            }
+            // Handle EVS -> Science
+            if (subjectLower === 'evs' || subjectLower.includes('environmental')) {
+              aiResponse.subject = 'science';
+            }
+            // Handle Math variations
+            if (subjectLower === 'math' || subjectLower === 'mathematics') {
+              aiResponse.subject = 'maths';
+            }
+          }
+          
+          // Also check the original message for subject hints
+          const msgLower = correctedText.toLowerCase();
+          if (aiResponse.searchType === 'class_subject' && aiResponse.classNum) {
+            if (msgLower.includes(' gk') || msgLower.includes('general knowledge')) {
+              aiResponse.subject = 'gk';
+            }
+          }
 
           let resourceUrl = buildSearchUrl(aiResponse);
           let resourceName = "";

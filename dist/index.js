@@ -1059,20 +1059,28 @@ async function advancedSearch(query, portalAPI = "https://portal.myschoolct.com/
 var BASE_URL = "https://portal.myschoolct.com";
 var PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
 var SUBJECT_MAPPINGS = {
-  "english": 0,
-  "maths": 1,
-  "math": 1,
-  "mathematics": 1,
-  "science": 8,
-  "social": 2,
-  "social studies": 2,
-  "telugu": 3,
-  "hindi": 4,
-  "evs": 5,
-  "environmental": 5,
-  "gk": 6,
-  "general knowledge": 6,
-  "art": 7
+  // Based on actual portal tab order: All(0), English(1), Maths(2), Science(3), Social(4), GK(5), Computer(6), Telugu(7), Hindi(8), Copy Writing(9)
+  "all": 0,
+  "english": 1,
+  "maths": 2,
+  "math": 2,
+  "mathematics": 2,
+  "science": 3,
+  "social": 4,
+  "social studies": 4,
+  "gk": 5,
+  "general knowledge": 5,
+  "computer": 6,
+  "computers": 6,
+  "telugu": 7,
+  "hindi": 8,
+  "copy writing": 9,
+  "copywriting": 9,
+  "evs": 3,
+  // EVS maps to Science
+  "environmental": 3,
+  "art": 0
+  // Art shows all
 };
 var CLASS_INDEX = {
   0: 0,
@@ -1189,6 +1197,24 @@ var appRouter = router({
         console.log(`\u270F\uFE0F Spell-checked "${translatedText}" \u2192 "${correctedText}"`);
         const aiResponse = await getAIResponse(correctedText, history);
         console.log(`\u{1F916} AI Response:`, aiResponse);
+        if (aiResponse.subject) {
+          const subjectLower = aiResponse.subject.toLowerCase();
+          if (subjectLower.includes("bank") || subjectLower === "gk" || subjectLower.includes("general")) {
+            aiResponse.subject = "gk";
+          }
+          if (subjectLower === "evs" || subjectLower.includes("environmental")) {
+            aiResponse.subject = "science";
+          }
+          if (subjectLower === "math" || subjectLower === "mathematics") {
+            aiResponse.subject = "maths";
+          }
+        }
+        const msgLower = correctedText.toLowerCase();
+        if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
+          if (msgLower.includes(" gk") || msgLower.includes("general knowledge")) {
+            aiResponse.subject = "gk";
+          }
+        }
         let resourceUrl = buildSearchUrl(aiResponse);
         let resourceName = "";
         let resourceDescription = "";
