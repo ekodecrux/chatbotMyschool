@@ -106,12 +106,35 @@ function buildSearchUrl(aiResponse: any): string {
 export const appRouter = router({
   chatbot: router({
     autocomplete: publicProcedure
-      .input(z.object({ query: z.string() }))
+      .input(z.object({ query: z.string(), language: z.string().optional() }))
       .query(async ({ input }) => {
         if (input.query.length < 2) {
           return { resources: [], images: [] };
         }
-        return { resources: [], images: [] };
+        
+        try {
+          // Fetch images from portal search API
+          const portalResults = await fetchPortalResults(input.query, 6);
+          
+          const images = portalResults.map((r: any) => ({
+            id: r.code || r.title,
+            url: r.thumbnail || r.path,
+            title: r.title,
+            category: r.category,
+          }));
+          
+          // Build resource suggestions
+          const resources = portalResults.length > 0 ? [{
+            name: `Search Images: "${input.query}"`,
+            description: `Found ${portalResults.length} results`,
+            url: `https://portal.myschoolct.com/views/result?text=${encodeURIComponent(input.query)}`,
+          }] : [];
+          
+          return { resources, images };
+        } catch (error) {
+          console.error("Autocomplete error:", error);
+          return { resources: [], images: [] };
+        }
       }),
 
     chat: publicProcedure
