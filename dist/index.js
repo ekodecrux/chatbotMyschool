@@ -1057,6 +1057,20 @@ async function advancedSearch(query, portalAPI = "https://portal.myschoolct.com/
 
 // server/routers.ts
 var BASE_URL = "https://portal.myschoolct.com";
+function extractImageCode(path3) {
+  const match = path3.match(/([A-Z0-9]+)\.(jpg|jpeg|png|webp|gif)$/i);
+  return match ? match[1] : path3;
+}
+function deduplicateResults(results) {
+  const seen = /* @__PURE__ */ new Set();
+  return results.filter((r) => {
+    const code = extractImageCode(r.path || r.thumbnail || "");
+    const uniqueKey = code || r.title;
+    if (seen.has(uniqueKey)) return false;
+    seen.add(uniqueKey);
+    return true;
+  });
+}
 var PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
 var SUBJECT_MAPPINGS = {
   // Based on actual portal tab order: All(0), English(1), Maths(2), Science(3), Social(4), GK(5), Computer(6), Telugu(7), Hindi(8), Copy Writing(9)
@@ -1111,7 +1125,9 @@ async function fetchPortalResults(query, size = 6) {
     console.log(`\u{1F50D} [PORTAL PRIORITY] Fetching results with advanced search: "${query}"`);
     const results = await advancedSearch(query, PORTAL_API);
     console.log(`\u2705 [PORTAL] Advanced search returned ${results.length} results`);
-    return results || [];
+    const uniqueResults = deduplicateResults(results || []);
+    console.log(`\u2705 [PORTAL] After deduplication: ${uniqueResults.length} unique results`);
+    return uniqueResults;
   } catch (error) {
     console.error("\u274C [PORTAL] Error in fetchPortalResults:", error);
     return [];

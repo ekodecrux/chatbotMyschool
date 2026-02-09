@@ -8,6 +8,29 @@ import { translateAndExtractKeyword } from "./translation_util";
 import { advancedSearch, enhanceSearchQuery } from "./advancedSearch";
 
 const BASE_URL = "https://portal.myschoolct.com";
+
+/**
+ * Extract unique image code from path (e.g., CTENIC0510001JPC from /path/to/CTENIC0510001JPC.jpg)
+ */
+function extractImageCode(path: string): string {
+  const match = path.match(/([A-Z0-9]+)\.(jpg|jpeg|png|webp|gif)$/i);
+  return match ? match[1] : path;
+}
+
+/**
+ * Deduplicate results by image code (removes .jpg/.webp duplicates)
+ */
+function deduplicateResults(results: PortalResult[]): PortalResult[] {
+  const seen = new Set<string>();
+  return results.filter(r => {
+    const code = extractImageCode(r.path || r.thumbnail || '');
+    // Also use title as fallback for uniqueness
+    const uniqueKey = code || r.title;
+    if (seen.has(uniqueKey)) return false;
+    seen.add(uniqueKey);
+    return true;
+  });
+}
 const PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
 
 // Subject ID mappings for URL parameters
@@ -79,7 +102,10 @@ async function fetchPortalResults(query: string, size: number = 6): Promise<Port
     const results = await advancedSearch(query, PORTAL_API);
     
     console.log(`✅ [PORTAL] Advanced search returned ${results.length} results`);
-    return results || [];
+    // Deduplicate results by image code
+    const uniqueResults = deduplicateResults(results || []);
+    console.log(`✅ [PORTAL] After deduplication: ${uniqueResults.length} unique results`);
+    return uniqueResults;
   } catch (error) {
     console.error('❌ [PORTAL] Error in fetchPortalResults:', error);
     return [];
