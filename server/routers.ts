@@ -10,6 +10,41 @@ import { advancedSearch, enhanceSearchQuery } from "./advancedSearch";
 const BASE_URL = "https://portal.myschoolct.com";
 const PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
 
+// Subject ID mappings for URL parameters
+// main=0 is CLASS, mu is the class index (0=KG, 1=Class1, etc.)
+// For subject-specific pages, we need different mu values based on content type
+const SUBJECT_MAPPINGS: Record<string, number> = {
+  'english': 0,
+  'maths': 1,
+  'math': 1,
+  'mathematics': 1,
+  'science': 8,
+  'social': 2,
+  'social studies': 2,
+  'telugu': 3,
+  'hindi': 4,
+  'evs': 5,
+  'environmental': 5,
+  'gk': 6,
+  'general knowledge': 6,
+  'art': 7,
+};
+
+// Class index mappings (mu parameter)
+const CLASS_INDEX: Record<number, number> = {
+  0: 0,  // KG
+  1: 1,  // Class 1
+  2: 2,  // Class 2
+  3: 3,  // Class 3
+  4: 4,  // Class 4
+  5: 5,  // Class 5
+  6: 6,  // Class 6
+  7: 7,  // Class 7
+  8: 8,  // Class 8
+  9: 9,  // Class 9
+  10: 10, // Class 10
+};
+
 interface PortalResult {
   path: string;
   title: string;
@@ -75,7 +110,9 @@ async function findNearestResults(originalQuery: string): Promise<{ query: strin
 }
 
 /**
- * Build search URL - always use /views/result?text=... for direct searches
+ * Build search URL with proper parameters
+ * Format: /views/academic/class/class-X?main=0&mu=Y
+ * Where X is class number and Y is class index (or subject-specific)
  */
 function buildSearchUrl(aiResponse: any): string {
   if (aiResponse.searchType === "invalid") {
@@ -83,10 +120,23 @@ function buildSearchUrl(aiResponse: any): string {
   }
   
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
-    return `${BASE_URL}/views/academic/class/class-${aiResponse.classNum}`;
+    const classNum = aiResponse.classNum;
+    const subject = (aiResponse.subject || '').toLowerCase();
+    const classIndex = CLASS_INDEX[classNum] || classNum;
+    
+    // Build URL with subject filter if available
+    let url = `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${classIndex}`;
+    
+    // If subject is specified, try to add subject-specific parameter
+    if (subject && SUBJECT_MAPPINGS[subject] !== undefined) {
+      // For subject-specific content, update mu to subject mapping
+      url = `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${SUBJECT_MAPPINGS[subject]}`;
+    }
+    
+    return url;
   }
   
-  // FIXED: Use /views/result?text=... (NOT /views/sections/result)
+  // For direct searches, use /views/result?text=...
   if (aiResponse.searchQuery) {
     return `${BASE_URL}/views/result?text=${encodeURIComponent(aiResponse.searchQuery)}`;
   }
@@ -153,27 +203,33 @@ export const appRouter = router({
           // Determine the search query to use
           let effectiveSearchQuery = aiResponse.searchQuery;
           
-          // For class_subject, construct a search query from class and subject
+          // For class_subject, construct a more specific search query
           if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
-            effectiveSearchQuery = `class ${aiResponse.classNum} ${aiResponse.subject || ''}`.trim();
+            const subject = aiResponse.subject || '';
+            // Make search more specific by including class and subject
+            effectiveSearchQuery = `class ${aiResponse.classNum} ${subject} charts`.trim();
           }
 
           // ===== CRITICAL: PORTAL BACKEND SEARCH IS ALWAYS PRIORITY =====
-          // For ANY search (direct or class_subject), fetch from portal
           if (effectiveSearchQuery) {
             console.log(`\n🔍 [PORTAL PRIORITY] Searching for: "${effectiveSearchQuery}"`);
             
-            // ALWAYS fetch portal results with advanced search (fuzzy + soundex + synonyms)
             let portalResults = await fetchPortalResults(effectiveSearchQuery, 6);
             
-            // If no results, try fallback
+            // If no results for specific query, try broader search
+            if (portalResults.length === 0 && aiResponse.searchType === "class_subject") {
+              const broaderQuery = aiResponse.subject || `class ${aiResponse.classNum}`;
+              console.log(`⚠️ Zero results, trying broader: "${broaderQuery}"`);
+              portalResults = await fetchPortalResults(broaderQuery, 6);
+            }
+            
+            // If still no results, try fallback
             if (portalResults.length === 0) {
-              console.log(`⚠️ Zero portal results for "${effectiveSearchQuery}", trying fallback...`);
+              console.log(`⚠️ Zero portal results, trying fallback...`);
               const fallback = await findNearestResults(effectiveSearchQuery);
               portalResults = fallback.results;
               
               if (portalResults.length > 0) {
-                // Update URL to show fallback query
                 resourceUrl = `${BASE_URL}/views/result?text=${encodeURIComponent(fallback.query)}`;
               }
             }
@@ -186,7 +242,6 @@ export const appRouter = router({
               category: r.category,
             }));
 
-            // Build resource name and description
             if (portalResults.length > 0) {
               resourceName = `${portalResults.length} resources found`;
               resourceDescription = portalResults
@@ -202,10 +257,10 @@ export const appRouter = router({
             }
           }
 
-          // FIXED: Declare finalMessage BEFORE using it
+          // Prepare final message
           let finalMessage = aiResponse.message;
           if (thumbnails.length > 0 && aiResponse.searchType !== "class_subject") {
-            finalMessage = `Found ${thumbnails.length} results for "${effectiveSearchQuery}"`;
+            finalMessage = `Found ${thumbnails.length} results for "${aiResponse.searchQuery || effectiveSearchQuery}"`;
           }
 
           // Save chat messages

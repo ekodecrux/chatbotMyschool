@@ -1058,6 +1058,46 @@ async function advancedSearch(query, portalAPI = "https://portal.myschoolct.com/
 // server/routers.ts
 var BASE_URL = "https://portal.myschoolct.com";
 var PORTAL_API = "https://portal.myschoolct.com/api/rest/search/global";
+var SUBJECT_MAPPINGS = {
+  "english": 0,
+  "maths": 1,
+  "math": 1,
+  "mathematics": 1,
+  "science": 8,
+  "social": 2,
+  "social studies": 2,
+  "telugu": 3,
+  "hindi": 4,
+  "evs": 5,
+  "environmental": 5,
+  "gk": 6,
+  "general knowledge": 6,
+  "art": 7
+};
+var CLASS_INDEX = {
+  0: 0,
+  // KG
+  1: 1,
+  // Class 1
+  2: 2,
+  // Class 2
+  3: 3,
+  // Class 3
+  4: 4,
+  // Class 4
+  5: 5,
+  // Class 5
+  6: 6,
+  // Class 6
+  7: 7,
+  // Class 7
+  8: 8,
+  // Class 8
+  9: 9,
+  // Class 9
+  10: 10
+  // Class 10
+};
 async function fetchPortalResults(query, size = 6) {
   try {
     console.log(`\u{1F50D} [PORTAL PRIORITY] Fetching results with advanced search: "${query}"`);
@@ -1098,7 +1138,14 @@ function buildSearchUrl(aiResponse) {
     return `${BASE_URL}/views/academic`;
   }
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
-    return `${BASE_URL}/views/academic/class/class-${aiResponse.classNum}`;
+    const classNum = aiResponse.classNum;
+    const subject = (aiResponse.subject || "").toLowerCase();
+    const classIndex = CLASS_INDEX[classNum] || classNum;
+    let url = `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${classIndex}`;
+    if (subject && SUBJECT_MAPPINGS[subject] !== void 0) {
+      url = `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${SUBJECT_MAPPINGS[subject]}`;
+    }
+    return url;
   }
   if (aiResponse.searchQuery) {
     return `${BASE_URL}/views/result?text=${encodeURIComponent(aiResponse.searchQuery)}`;
@@ -1148,14 +1195,20 @@ var appRouter = router({
         let thumbnails = [];
         let effectiveSearchQuery = aiResponse.searchQuery;
         if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
-          effectiveSearchQuery = `class ${aiResponse.classNum} ${aiResponse.subject || ""}`.trim();
+          const subject = aiResponse.subject || "";
+          effectiveSearchQuery = `class ${aiResponse.classNum} ${subject} charts`.trim();
         }
         if (effectiveSearchQuery) {
           console.log(`
 \u{1F50D} [PORTAL PRIORITY] Searching for: "${effectiveSearchQuery}"`);
           let portalResults = await fetchPortalResults(effectiveSearchQuery, 6);
+          if (portalResults.length === 0 && aiResponse.searchType === "class_subject") {
+            const broaderQuery = aiResponse.subject || `class ${aiResponse.classNum}`;
+            console.log(`\u26A0\uFE0F Zero results, trying broader: "${broaderQuery}"`);
+            portalResults = await fetchPortalResults(broaderQuery, 6);
+          }
           if (portalResults.length === 0) {
-            console.log(`\u26A0\uFE0F Zero portal results for "${effectiveSearchQuery}", trying fallback...`);
+            console.log(`\u26A0\uFE0F Zero portal results, trying fallback...`);
             const fallback = await findNearestResults(effectiveSearchQuery);
             portalResults = fallback.results;
             if (portalResults.length > 0) {
@@ -1180,7 +1233,7 @@ var appRouter = router({
         }
         let finalMessage = aiResponse.message;
         if (thumbnails.length > 0 && aiResponse.searchType !== "class_subject") {
-          finalMessage = `Found ${thumbnails.length} results for "${effectiveSearchQuery}"`;
+          finalMessage = `Found ${thumbnails.length} results for "${aiResponse.searchQuery || effectiveSearchQuery}"`;
         }
         await saveChatMessage({
           sessionId,
