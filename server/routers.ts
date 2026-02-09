@@ -158,7 +158,37 @@ export const appRouter = router({
         if (input.query.length < 2) {
           return { resources: [], images: [] };
         }
-        return { resources: [], images: [] };
+        
+        try {
+          console.log(`🔍 [AUTOCOMPLETE] Query: "${input.query}"`);
+          
+          // Fetch results from portal API
+          const portalResults = await fetchPortalResults(input.query, 6);
+          
+          // Filter only image results for thumbnails
+          const images = portalResults
+            .filter(r => r.type === 'image' || r.thumbnail?.match(/\.(jpg|jpeg|png|gif|webp)/i))
+            .map(r => ({
+              url: r.path,
+              thumbnail: r.thumbnail,
+              title: r.title,
+              category: r.category,
+            }));
+          
+          // Build resource suggestions
+          const resources = portalResults.slice(0, 5).map(r => ({
+            title: r.title,
+            path: r.path,
+            category: r.category,
+          }));
+          
+          console.log(`✅ [AUTOCOMPLETE] Found ${images.length} images, ${resources.length} resources`);
+          
+          return { resources, images };
+        } catch (error) {
+          console.error('❌ [AUTOCOMPLETE] Error:', error);
+          return { resources: [], images: [] };
+        }
       }),
 
     chat: publicProcedure

@@ -341,9 +341,9 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Found Images</div>
                 <div className="flex gap-3 overflow-x-auto pb-1 px-2 scrollbar-hide">
                   {getUniqueImages(autocompleteQuery.data.images).map((img: any) => (
-                    <div key={img.id} className="flex-shrink-0 w-16 group cursor-pointer" onClick={() => handleSendMessage(img.title)}>
+                    <div key={img.url || img.title} className="flex-shrink-0 w-16 group cursor-pointer" onClick={() => handleSendMessage(img.title)}>
                       <div className="aspect-square rounded-lg bg-gray-100 overflow-hidden border-2 border-transparent group-hover:border-pink-400 transition-all">
-                        <img src={img.url} alt={img.title} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                        <img src={img.thumbnail || img.url} alt={img.title} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
                       </div>
                       <div className="text-[9px] text-gray-500 mt-1 truncate text-center">{img.title}</div>
                     </div>
@@ -354,13 +354,13 @@ export function ChatWidget({ autoOpen = false, isEmbedded = false }: ChatWidgetP
             {autocompleteQuery.data.resources.length > 0 && (
               <div className="p-2">
                 {autocompleteQuery.data.resources.map((res: any, idx: number) => (
-                  <button key={idx} onClick={() => handleSendMessage(res.name)} className="w-full flex items-center gap-3 p-2.5 hover:bg-pink-50 rounded-lg transition-colors text-left group">
+                  <button key={idx} onClick={() => handleSendMessage(res.title)} className="w-full flex items-center gap-3 p-2.5 hover:bg-pink-50 rounded-lg transition-colors text-left group">
                     <div className="h-8 w-8 rounded-lg bg-pink-100 flex items-center justify-center group-hover:bg-pink-200 transition-colors">
                       <Search className="h-4 w-4 text-pink-600" />
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-gray-800">{res.name}</div>
-                      <div className="text-xs text-gray-400 truncate max-w-[200px]">{res.description}</div>
+                      <div className="text-sm font-medium text-gray-800">{res.title}</div>
+                      <div className="text-xs text-gray-400 truncate max-w-[200px]">{res.category}</div>
                     </div>
                   </button>
                 ))}

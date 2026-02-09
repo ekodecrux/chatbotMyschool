@@ -1166,7 +1166,26 @@ var appRouter = router({
       if (input.query.length < 2) {
         return { resources: [], images: [] };
       }
-      return { resources: [], images: [] };
+      try {
+        console.log(`\u{1F50D} [AUTOCOMPLETE] Query: "${input.query}"`);
+        const portalResults = await fetchPortalResults(input.query, 6);
+        const images = portalResults.filter((r) => r.type === "image" || r.thumbnail?.match(/\.(jpg|jpeg|png|gif|webp)/i)).map((r) => ({
+          url: r.path,
+          thumbnail: r.thumbnail,
+          title: r.title,
+          category: r.category
+        }));
+        const resources = portalResults.slice(0, 5).map((r) => ({
+          title: r.title,
+          path: r.path,
+          category: r.category
+        }));
+        console.log(`\u2705 [AUTOCOMPLETE] Found ${images.length} images, ${resources.length} resources`);
+        return { resources, images };
+      } catch (error) {
+        console.error("\u274C [AUTOCOMPLETE] Error:", error);
+        return { resources: [], images: [] };
+      }
     }),
     chat: publicProcedure.input(
       z.object({
