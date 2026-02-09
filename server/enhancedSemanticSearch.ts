@@ -104,15 +104,30 @@ const COMMON_WORDS: Record<string, string> = {
 };
 
 // Correct spelling using dictionary and fuzzy matching
+// Words to skip during spell correction (common English words)
+const SKIP_WORDS = new Set([
+  'how', 'are', 'you', 'what', 'is', 'the', 'a', 'an', 'to', 'for', 'in', 'on', 'at',
+  'it', 'this', 'that', 'can', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
+  'be', 'been', 'being', 'have', 'has', 'had', 'was', 'were', 'am', 'is', 'are',
+  'i', 'me', 'my', 'we', 'us', 'our', 'your', 'they', 'them', 'their', 'he', 'she',
+  'hi', 'hello', 'hey', 'good', 'morning', 'evening', 'night', 'help', 'please',
+  'find', 'search', 'show', 'give', 'get', 'want', 'need', 'like', 'about',
+  'class', 'grade', 'level', 'subject', 'topic', 'chapter', 'lesson',
+  'and', 'or', 'but', 'if', 'then', 'so', 'because', 'with', 'from', 'of',
+]);
+
 function correctSpelling(query: string): string {
   const words = query.toLowerCase().split(/\s+/);
   const corrected = words.map(word => {
+    // Skip common English words that shouldn't be corrected
+    if (SKIP_WORDS.has(word) || word.length <= 2) return word;
+    
     // Direct match in dictionary
     if (COMMON_WORDS[word]) return COMMON_WORDS[word];
     
     // Fuzzy match - find best match from dictionary
     let bestMatch = word;
-    let bestDistance = 3; // max distance threshold
+    let bestDistance = 2; // reduced threshold to prevent over-correction
     
     for (const [misspelled, correct] of Object.entries(COMMON_WORDS)) {
       const dist = levenshtein(word, misspelled);
