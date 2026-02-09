@@ -1067,24 +1067,20 @@ async function findNearestResults(originalQuery) {
   const lastResort = await fetchPortalResults("educational resources", 6);
   return { query: "educational resources", results: lastResort };
 }
-var SUBJECT_MAPPINGS = {
-  "all": 0,
+var SUBJECT_MU = {
   "english": 1,
   "maths": 2,
   "math": 2,
   "mathematics": 2,
   "science": 3,
   "social": 4,
-  "social studies": 4,
   "gk": 5,
   "general knowledge": 5,
   "computer": 6,
-  "computers": 6,
   "telugu": 7,
   "hindi": 8,
-  "copy writing": 9,
   "evs": 3,
-  "environmental": 3
+  "bank": 5
 };
 function buildSearchUrl(aiResponse) {
   if (aiResponse.searchType === "invalid") {
@@ -1093,14 +1089,7 @@ function buildSearchUrl(aiResponse) {
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
     const classNum = aiResponse.classNum;
     let subject = (aiResponse.subject || "").toLowerCase();
-    if (subject.includes("bank") || subject === "gk" || subject.includes("general")) {
-      subject = "gk";
-    } else if (subject === "evs" || subject.includes("environmental")) {
-      subject = "science";
-    } else if (subject === "math" || subject === "mathematics") {
-      subject = "maths";
-    }
-    const mu = SUBJECT_MAPPINGS[subject] !== void 0 ? SUBJECT_MAPPINGS[subject] : classNum;
+    const mu = SUBJECT_MU[subject] !== void 0 ? SUBJECT_MU[subject] : classNum;
     return `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${mu}`;
   }
   if (aiResponse.searchQuery) {
@@ -1177,22 +1166,8 @@ var appRouter = router({
             resourceUrl = `${BASE_URL}/views/academic`;
           }
         }
-        let finalMessage = aiResponse.message;
-        if (thumbnails.length > 0) {
-          finalMessage = `Found ${thumbnails.length} results for "${aiResponse.searchQuery}"`;
-        }
-        await saveChatMessage({
-          sessionId,
-          role: "user",
-          message,
-          language: language || "en"
-        });
-        await saveChatMessage({
-          sessionId,
-          role: "assistant",
-          message: finalMessage,
-          language: "en"
-        });
+        await saveChatMessage({ sessionId, role: "user", message, language: language || "en" });
+        await saveChatMessage({ sessionId, role: "assistant", message: aiResponse.message, language: "en" });
         if (aiResponse.searchQuery) {
           await logSearchQuery({
             sessionId,
@@ -1206,6 +1181,10 @@ var appRouter = router({
         }
         console.log(`\u2705 === PORTAL PRIORITY SEARCH COMPLETE ===
 `);
+        let finalMessage = aiResponse.message;
+        if (thumbnails.length > 0) {
+          finalMessage = `Found ${thumbnails.length} results for "${aiResponse.searchQuery}"`;
+        }
         return {
           response: finalMessage,
           resourceUrl,

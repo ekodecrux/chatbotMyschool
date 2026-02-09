@@ -77,12 +77,11 @@ async function findNearestResults(originalQuery: string): Promise<{ query: strin
 /**
  * Build search URL - always use /views/result?text=... for direct searches
  */
-// Subject ID mappings for URL parameters
-const SUBJECT_MAPPINGS: Record<string, number> = {
-  'all': 0, 'english': 1, 'maths': 2, 'math': 2, 'mathematics': 2,
-  'science': 3, 'social': 4, 'social studies': 4,
-  'gk': 5, 'general knowledge': 5, 'computer': 6, 'computers': 6,
-  'telugu': 7, 'hindi': 8, 'copy writing': 9, 'evs': 3, 'environmental': 3,
+// Subject mappings for URL (mu parameter)
+const SUBJECT_MU: Record<string, number> = {
+  'english': 1, 'maths': 2, 'math': 2, 'mathematics': 2,
+  'science': 3, 'social': 4, 'gk': 5, 'general knowledge': 5,
+  'computer': 6, 'telugu': 7, 'hindi': 8, 'evs': 3, 'bank': 5,
 };
 
 function buildSearchUrl(aiResponse: any): string {
@@ -93,22 +92,10 @@ function buildSearchUrl(aiResponse: any): string {
   if (aiResponse.searchType === "class_subject" && aiResponse.classNum) {
     const classNum = aiResponse.classNum;
     let subject = (aiResponse.subject || '').toLowerCase();
-    
-    // Normalize subject (handle GK, EVS variations)
-    if (subject.includes('bank') || subject === 'gk' || subject.includes('general')) {
-      subject = 'gk';
-    } else if (subject === 'evs' || subject.includes('environmental')) {
-      subject = 'science';
-    } else if (subject === 'math' || subject === 'mathematics') {
-      subject = 'maths';
-    }
-    
-    // Build URL with subject filter
-    const mu = SUBJECT_MAPPINGS[subject] !== undefined ? SUBJECT_MAPPINGS[subject] : classNum;
+    const mu = SUBJECT_MU[subject] !== undefined ? SUBJECT_MU[subject] : classNum;
     return `${BASE_URL}/views/academic/class/class-${classNum}?main=0&mu=${mu}`;
   }
   
-  // For direct searches, use /views/result?text=...
   if (aiResponse.searchQuery) {
     return `${BASE_URL}/views/result?text=${encodeURIComponent(aiResponse.searchQuery)}`;
   }
@@ -216,25 +203,9 @@ export const appRouter = router({
             }
           }
 
-          // Prepare final message
-          let finalMessage = aiResponse.message;
-          if (thumbnails.length > 0) {
-            finalMessage = `Found ${thumbnails.length} results for "${aiResponse.searchQuery}"`;
-          }
-
           // Save chat messages
-          await saveChatMessage({
-            sessionId,
-            role: "user",
-            message,
-            language: language || "en",
-          });
-          await saveChatMessage({
-            sessionId,
-            role: "assistant",
-            message: finalMessage,
-            language: "en",
-          });
+          await saveChatMessage({ sessionId, role: "user", message, language: language || "en" });
+          await saveChatMessage({ sessionId, role: "assistant", message: aiResponse.message, language: "en" });
 
           // Log search
           if (aiResponse.searchQuery) {
@@ -252,6 +223,11 @@ export const appRouter = router({
           console.log(`✅ === PORTAL PRIORITY SEARCH COMPLETE ===\n`);
 
           // Override AI message with portal results for better UX
+          let finalMessage = aiResponse.message;
+          if (thumbnails.length > 0) {
+            finalMessage = `Found ${thumbnails.length} results for "${aiResponse.searchQuery}"`;
+          }
+
           return {
             response: finalMessage,
             resourceUrl,
