@@ -1,0 +1,61 @@
+{
+  "base_url": "https://portal.myschoolct.com",
+  "sections": {
+    "academic": {
+      "name": "Academic",
+      "url": "/views/academic",
+      "description": "Access academic resources by class and subject",
+      "keywords": ["academic"],
+      "subsections": {
+        "grades": {
+          "description": "Classes 1-10 curriculum",
+          "subjects": {
+            "computer": { "code": "com", "keywords": ["computer", "computers", "computing", "coding", "programming"] },
+            "english": { "code": "eng", "keywords": ["english", "grammar"] },
+            "evs": { "code": "evs", "keywords": ["evs", "environmental studies", "environment"] },
+            "hindi": { "code": "hin", "keywords": ["hindi"] },
+            "maths": { "code": "mat", "keywords": ["maths", "mathematics", "math"] },
+            "science": { "code": "sci", "keywords": ["science", "physics", "chemistry", "biology"] },
+            "social": { "code": "soc", "keywords": ["social", "social studies", "history", "geography", "civics"] },
+            "telugu": { "code": "tel", "keywords": ["telugu"] }
+          }
+        },
+        "one_click_resources": {
+          "description": "One Click Resource Centre",
+          "resources": [
+            {
+              "name": "Smart Wall",
+              "url": "/views/academic/smart-wall?ocrc",
+              "keywords": ["smart wall", "smartwall", "class decoration", "classroom decoration"]
+            },
+            {
+              "name": "Image Bank",
+              "url": "/views/sections/image-bank",
+              "keywords": ["image bank", "imagebank"]
+            },
+            {
+              "name": "Exam Tips",
+              "url": "/views/academic/result?text=exam tips",
+              "keywords": ["exam tips", "examtips"]
+            },
+            {
+              "name": "MCQ Bank",
+              "url": "/views/academic/result?text=mcq",
+              "keywords": ["mcq bank", "mcqbank", "mcq"]
+            },
+            {
+              "name": "Visual Worksheets",
+              "url": "/views/academic/result?text=visual worksheets",
+              "keywords": ["visual worksheets", "visual worksheet"]
+            },
+            {
+              "name": "Pictorial Stories",
+              "url": "/views/academic/result?text=pictorial stories",
+              "keywords": ["pictorial stories", "pictorial story"]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

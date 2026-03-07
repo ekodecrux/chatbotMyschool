@@ -1,0 +1,513 @@
+import React, { useState, useEffect, useRef } from "react";
+import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { MessageCircle, X, Send, Mic, Image as ImageIcon, Loader2, Volume2, VolumeX, Languages } from "lucide-react";
+import { Streamdown } from "streamdown";
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  suggestions?: string[];
+  resourceUrl?: string;
+}
+
+interface ChatWidgetProps {
+  autoOpen?: boolean;
+}
+
+export function ChatWidget({ autoOpen = false }: ChatWidgetProps = {}) {
+  const [isOpen, setIsOpen] = useState(autoOpen);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputValue, setInputValue] = useState("");
+  const [sessionId, setSessionId] = useState<string>("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [dailyTip, setDailyTip] = useState<string>("");
+  const [voiceError, setVoiceError] = useState<string>("");
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  const chatMutation = trpc.chatbot.chat.useMutation();
+
+  useEffect(() => {
+    // Load session from localStorage
+    const savedSessionId = localStorage.getItem("myschool_chat_session");
+    const savedLanguage = localStorage.getItem("myschool_chat_language");
+    const savedHistory = localStorage.getItem("myschool_search_history");
+    
+    if (savedSessionId) {
+      setSessionId(savedSessionId);
+      loadHistory(savedSessionId);
+    } else {
+      const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      setSessionId(newSessionId);
+      localStorage.setItem("myschool_chat_session", newSessionId);
+    }
+    
+    if (savedLanguage) {
+      setSelectedLanguage(savedLanguage);
+    }
+    
+    if (savedHistory) {
+      try {
+        setSearchHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        // Failed to parse history
+      }
+    }
+    
+    // Setup Web Speech API
+    setupSpeechRecognition();
+  }, []);
+
+  useEffect(() => {
+    const tips = [
+      "Try using voice input for hands-free learning!",
+      "Explore our Smart Wall for interactive displays",
+      "Check out the Image Bank with 80,000+ educational images"
+    ];
+    setDailyTip(tips[Math.floor(Math.random() * tips.length)]);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const setupSpeechRecognition = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognitionConstructor =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition;
+      
+      recognitionRef.current = new SpeechRecognitionConstructor();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      
+      // Set language based on selected language
+      const langMap: Record<string, string> = {
+        'en': 'en-US',
+        'hi': 'hi-IN',
+        'te': 'te-IN',
+        'gu': 'gu-IN'
+      };
+      recognitionRef.current.lang = langMap[selectedLanguage] || 'en-US';
+
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInputValue(transcript);
+        setIsRecording(false);
+        setVoiceError("");
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        // Speech recognition error occurred
+        setIsRecording(false);
+        
+        if (event.error === 'no-speech') {
+          setVoiceError("No speech detected. Please try again.");
+        } else if (event.error === 'not-allowed') {
+          setVoiceError("Microphone access denied. Please allow microphone access.");
+        } else if (event.error === 'network') {
+          setVoiceError("Network error. Please check your connection.");
+        } else {
+          setVoiceError(`Voice input error: ${event.error}`);
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsRecording(false);
+      };
+    } else {
+      setVoiceError("Voice input is not supported in your browser.");
+    }
+  };
+
+  // Update recognition language when selectedLanguage changes
+  useEffect(() => {
+    if (recognitionRef.current) {
+      const langMap: Record<string, string> = {
+        'en': 'en-US',
+        'hi': 'hi-IN',
+        'te': 'te-IN',
+        'gu': 'gu-IN'
+      };
+      recognitionRef.current.lang = langMap[selectedLanguage] || 'en-US';
+    }
+  }, [selectedLanguage]);
+
+  const loadHistory = async (sid: string) => {
+    // Load conversation history from server
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || inputValue.trim();
+    if (!textToSend) return;
+
+    const userMessage: Message = {
+      role: "user",
+      content: textToSend,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue("");
+    
+    // Update search history
+    setSearchHistory(prev => {
+      const updated = [textToSend, ...prev.filter(q => q !== textToSend)].slice(0, 10);
+      localStorage.setItem("myschool_search_history", JSON.stringify(updated));
+      return updated;
+    });
+    setShowHistory(false);
+
+    try {
+      const response = await chatMutation.mutateAsync({
+        message: textToSend,
+        sessionId: sessionId,
+        language: selectedLanguage,
+      });
+
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: response.response,
+        resourceUrl: response.resourceUrl,
+        timestamp: new Date().toISOString(),
+        suggestions: [],
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Auto-speak response if enabled
+      if (isSpeaking) {
+        const plainText = response.response.replace(/[*_~`#\[\]()]/g, "");
+        speakText(plainText);
+      }
+    } catch (error) {
+      // Handle chat error
+      const errorMessage: Message = {
+        role: "assistant",
+        content: "Sorry, I encountered an error. Please try again.",
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    }
+  };
+
+  const startListening = () => {
+    if (!recognitionRef.current) {
+      setVoiceError("Voice input is not supported in your browser.");
+      return;
+    }
+
+    if (isRecording) {
+      // Stop recording
+      try {
+        recognitionRef.current.stop();
+        setIsRecording(false);
+      } catch (error) {
+        // Error stopping recognition
+        setIsRecording(false);
+      }
+    } else {
+      // Start recording
+      setVoiceError("");
+      setIsRecording(true);
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        // Error starting recognition
+        setVoiceError("Could not start voice input. Please try again.");
+        setIsRecording(false);
+      }
+    }
+  };
+
+  const speakText = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = selectedLanguage === 'en' ? 'en-US' : 
+                       selectedLanguage === 'hi' ? 'hi-IN' :
+                       selectedLanguage === 'te' ? 'te-IN' : 'gu-IN';
+      utterance.onend = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+      setIsSpeaking(true);
+    }
+  };
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
+  return (
+    <>
+      {!isOpen && (
+        <Button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-lg z-50"
+          style={{ backgroundColor: "#E91E63" }}
+        >
+          <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+        </Button>
+      )}
+
+      {isOpen && (
+        <Card className="fixed bottom-4 right-4 w-full max-w-[calc(100vw-2rem)] sm:w-96 h-[calc(100vh-2rem)] sm:h-[600px] sm:bottom-6 sm:right-6 flex flex-col shadow-2xl z-50 rounded-2xl overflow-hidden">
+          {/* Header */}
+          <div className="p-4 text-white flex items-center justify-between" style={{ backgroundColor: "#E91E63" }}>
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              <span className="font-semibold">MySchool Assistant</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsOpen(false)}
+              className="text-white hover:bg-pink-600"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Daily Tip */}
+          {dailyTip && (
+            <div className="px-4 py-3 bg-yellow-50 border-b border-yellow-200 text-sm">
+              <span className="font-semibold text-yellow-800">💡 Tip of the Day:</span>
+              <span className="text-yellow-700 ml-1">{dailyTip}</span>
+            </div>
+          )}
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-center p-6">
+                <MessageCircle className="h-16 w-16 text-gray-300 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                  Hi! I'm your MySchool Navigator.
+                </h3>
+                <p className="text-gray-500 text-sm">
+                  Ask me anything about the platform!
+                </p>
+              </div>
+            )}
+
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-lg p-3 ${
+                    msg.role === "user"
+                      ? "bg-pink-500 text-white"
+                      : "bg-white text-gray-800 shadow-sm border border-gray-200"
+                  }`}
+                >
+                  {msg.role === "assistant" ? (
+                    <div>
+                      <Streamdown>{msg.content}</Streamdown>
+                      {msg.resourceUrl && (
+                        <a
+                          href={msg.resourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-block bg-pink-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-pink-600 transition"
+                        >
+                          Open Resource →
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm">{msg.content}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {chatMutation.isPending && (
+              <div className="flex justify-start">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                  <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                  Thinking...
+                </div>
+              </div>
+            )}
+
+            {voiceError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                {voiceError}
+              </div>
+            )}
+
+            {isRecording && (
+              <div className="flex justify-center">
+                <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-sm text-pink-700 flex items-center gap-2">
+                  <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
+                  Listening... Speak now
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Language Selector */}
+          {showLanguageMenu && (
+            <div className="p-3 border-t border-gray-200 bg-gray-50">
+              <div className="text-xs font-semibold text-gray-600 mb-2">Select Language</div>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { code: "en", name: "English", flag: "🇬🇧" },
+                  { code: "hi", name: "हिंदी", flag: "🇮🇳" },
+                  { code: "te", name: "తెలుగు", flag: "🇮🇳" },
+                  { code: "gu", name: "ગુજરાતી", flag: "🇮🇳" },
+                ].map((lang) => (
+                  <Button
+                    key={lang.code}
+                    variant={selectedLanguage === lang.code ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setSelectedLanguage(lang.code);
+                      localStorage.setItem("myschool_chat_language", lang.code);
+                      setShowLanguageMenu(false);
+                    }}
+                    className="text-xs"
+                    style={selectedLanguage === lang.code ? { backgroundColor: "#E91E63" } : {}}
+                  >
+                    {lang.flag} {lang.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search History */}
+          {showHistory && searchHistory.length > 0 && (
+            <div className="p-3 border-t border-gray-200 bg-gray-50 max-h-40 overflow-y-auto">
+              <div className="text-xs font-semibold text-gray-600 mb-2">Recent Searches</div>
+              <div className="space-y-1">
+                {searchHistory.map((query, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setInputValue(query);
+                      setShowHistory(false);
+                    }}
+                    className="w-full text-left px-2 py-1 text-sm text-gray-700 hover:bg-gray-200 rounded"
+                  >
+                    {query}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Input Area */}
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex gap-2 items-center">
+              {/* Language Toggle */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+                title="Change Language"
+              >
+                <Languages className="h-4 w-4" />
+              </Button>
+
+              {/* TTS Toggle */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={isSpeaking ? stopSpeaking : () => {}}
+                title={isSpeaking ? "Stop Speaking" : "Enable Voice Response"}
+                className={isSpeaking ? "bg-green-100" : ""}
+              >
+                {isSpeaking ? <Volume2 className="h-4 w-4 text-green-600" /> : <VolumeX className="h-4 w-4" />}
+              </Button>
+
+              {/* Input Field */}
+              <div className="flex-1 relative">
+                <Input
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  onFocus={() => setShowHistory(searchHistory.length > 0)}
+                  placeholder="Type your message..."
+                  className="pr-10"
+                />
+              </div>
+
+              {/* Voice Input Button */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={startListening}
+                disabled={chatMutation.isPending}
+                className={isRecording ? "bg-pink-100 border-pink-300" : ""}
+                title={isRecording ? "Stop Recording" : "Start Voice Input"}
+              >
+                <Mic className={`h-4 w-4 ${isRecording ? "text-pink-600 animate-pulse" : ""}`} />
+              </Button>
+
+              {/* Send Button */}
+              <Button
+                onClick={() => handleSendMessage()}
+                disabled={!inputValue.trim() || chatMutation.isPending}
+                style={{ backgroundColor: "#E91E63" }}
+              >
+                <Send className="h-4 w-4 text-white" />
+              </Button>
+            </div>
+
+            {/* Quick Search Buttons */}
+            {messages.length === 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="text-xs font-semibold text-gray-600 mb-2">Popular Searches</div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "🐯 Animals", query: "animals" },
+                    { label: "🔬 Science", query: "science" },
+                    { label: "➗ Math", query: "mathematics" },
+                    { label: "🌍 Geography", query: "geography" },
+                    { label: "📚 English", query: "english" },
+                    { label: "🎨 Arts", query: "arts" },
+                    { label: "⚽ Sports", query: "sports" },
+                    { label: "📖 History", query: "history" },
+                  ].map((item) => (
+                    <button
+                      key={item.query}
+                      onClick={() => handleSendMessage(item.query)}
+                      className="px-3 py-1.5 text-xs font-medium rounded-full border border-pink-200 bg-pink-50 text-pink-700 hover:bg-pink-100 hover:border-pink-300 transition-colors"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+    </>
+  );
+}
